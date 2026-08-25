@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html Familyg="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Recipe Archive</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pico.min.css')}}">
+    <style>
+        body { padding: 20px 0; }
+        .recipe-hero-img { width: 100%; max-height: 350px; object-fit: cover; border-radius: 8px; margin-bottom: 20px; }
+        .recipe-thumbnail { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; vertical-align: middle; margin-right: 10px; }
+        .recipe-item { display: flex; align-items: center; margin-bottom: 10px; }
+        .search-container { margin-bottom: 25px; }
+        .action-buttons { display: flex; gap: 15px; }
+        .stars-display { color: #ffbc00; font-size: 1.1rem; }
+        .rating-select { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
+        .rating-select label { margin: 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <!-- Flash Alerts -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, msg in messages %}
+                    <div class="alert-banner {{ category }}" style="padding: 10px; margin-bottom: 20px; border-radius: 4px; background-color: #d4edda; color: #155724;">
+                        {{ msg }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <header>
+            <hgroup>
+                <h1>🍲 Family Recipe Archive</h1>
+                <h2>Your local cookbook server</h2>
+            </hgroup>
+            <nav>
+                <ul>
+                    <li><a href="{{ url_for('recipes.index') }}" class="outline">Home</a></li>
+                    <li><a href="#add-manual" class="secondary">Add Manually</a></li>
+                    <li><a href="#import-link" class="secondary">Import from URL</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        {# Case A: Editing Mode Enabled #}
+        {% if recipe and is_editing %}
+            <article>
+                <header><strong>✏️ Edit Recipe: {{ recipe.title }}</strong></header>
+                <form action="{{ url_for('recipes.update_recipe', recipe_id=recipe.id) }}" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <label for="title">Recipe Title</label>
+                    <input type="text" id="title" name="title" value="{{ recipe.title }}" required>
+
+                    <label for="description">Short Description</label>
+                    <input type="text" id="description" name="description" value="{{ recipe.description or '' }}">
+                    
+                    <label>Recipe Rating</label>
+                    <div class="rating-select">
+                        {% for i in range(0, 6) %}
+                            <label>
+                                <input type="radio" name="rating" value="{{ i }}" {% if recipe.rating == i %}checked{% endif %}> 
+                                {% if i == 0 %}Unrated{% else %}{{ i }} ★{% endif %}
+                            </label>
+                        {% endfor %}
+                    </div>
+                    
+                    <label for="image_file">Update Picture (Optional)</label>
+                    <input type="file" id="image_file" name="image_file" accept="image/*">
+
+                    <label for="ingredients">Ingredients (One per line)</label>
+                    <textarea id="ingredients" name="ingredients" rows="6" required>{{ recipe.ingredients }}</textarea>
+                    
+                    <label for="instructions">Instructions (One step per line)</label>
+                    <textarea id="instructions" name="instructions" rows="6" required>{{ recipe.instructions }}</textarea>
+                    
+                    <div class="action-buttons">
+                        <button type="submit">Save Updates</button>
+                        <a href="{{ url_for('recipes.view_recipe', recipe_id=recipe.id) }}" class="button secondary outline">Cancel</a>
+                    </div>
+                </form>
+            </article>
+
+        {# Case B: Standard Recipe Viewer Mode #}
+        {% elif recipe %}
+            <article>
+                <header>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h2 style="margin:0;">{{ recipe.title }}</h2>
+                        <a href="{{ url_for('recipes.edit_recipe_form', recipe_id=recipe.id) }}" class="button secondary outline" style="padding: 5px 15px; font-size: 0.85rem;">Edit Content</a>
+                    </div>
+                    
+                    <!-- Rating Graphic Row -->
+                    <div style="margin: 10px 0;">
+                        {% if recipe.rating > 0 %}
+                            <span class="stars-display">
+                                {{ "★" * recipe.rating }}{{ "☆" * (5 - recipe.rating) }}
+                            </span>
+                        {% else %}
+                            <small style="color: gray;">Unrated</small>
+                        {% endif %}
+                    </div>
+
+                    {% if recipe.description %}
+                        <p style="font-style: italic; color: #555;">{{ recipe.description }}</p>
+                    {% endif %}
+
+                    {% if recipe.notes %}
+                        <p style="font-style: italic; color: #555;">{{ recipe.notes }}</p>
+                    {% endif %}
+
+                    {% if recipe.source_url %}
+                        <p style="margin-top:10px;"><small>Archived from: <a href="{{ recipe.source_url }}" target="_bFamilyk">{{ recipe.source_url }}</a></small></p>
+                    {% endif %}
+                </header>
+                
+                {% if recipe.image_url %}
+                    <img src="{{ url_for('static', filename='images/' + recipe.image_url) }}" class="recipe-hero-img" alt="">
+                {% endif %}
+
+                <div class="grid">
+                    <div>
+                        <h3>Ingredients</h3>
+                        <ul>
+                            {% for ing in recipe.ingredients.split('\n') %}
+                                {% if ing.strip() %}<li>{{ ing }}</li>{% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>Instructions</h3>
+                        <ol>
+                            {% for step in recipe.instructions.split('\n') %}
+                                {% if step.strip() %}<li>{{ step }}</li>{% endif %}
+                            {% endfor %}
+                        </ol>
+                    </div>
+                </div>
+                <footer>
+                    <form action="{{ url_for('recipes.delete_recipe', recipe_id=recipe.id) }}" method="POST" onsubmit="return confirm('Delete this local copy?');" style="margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="contrast" style="width: auto; padding: 5px 15px;">Delete Recipe</button>
+                    </form>
+                </footer>
+            </article>
+
+        {# Case C: Main Home Dashboard with Filter Search Bar #}
+        {% else %}
+            <!-- Interactive Family Search Module -->
+            <div class="search-container">
+                <form action="{{ url_for('recipes.index') }}" method="GET" style="display: flex; gap: 10px; margin: 0;">
+                    <input type="search" name="q" placeholder="Search by title or ingredient (e.g. Chicken)..." value="{{ search_query }}" style="margin:0;">
+                    <button type="submit" style="width: auto; margin:0;">Search</button>
+                    {% if search_query %}
+                        <a href="{{ url_for('recipes.index') }}" class="button contrast outline" style="margin:0; white-space: nowrap;">Clear</a>
+                    {% endif %}
+                </form>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <h3>
+                        {% if search_query %}
+                            Search Results ({{ recipes|length }})
+                        {% else %}
+                            Saved Recipes ({{ recipes|length }})
+                        {% endif %}
+                    </h3>
+                    {% if not recipes %}
+                        <p>No matching archived recipes found.</p>
+                    {% else %}
+                        <ul style="list-style: none; padding-left: 0;">
+                            {% for r in recipes %}
+                                <li class="recipe-item">
+                                    {% if r.image_url %}
+                                        {% if r.image_url.startswith('http') %}
+                                            <img src="{{ r.image_url }}" class="recipe-thumbnail" alt="">
+                                        {% else %}
+                                            <img src="{{ url_for('static', filename='images/' + r.image_url) }}" class="recipe-thumbnail" alt="">
+                                        {% endif %}
+                                    {% endif %}
+                                    <a href="{{ url_for('recipes.view_recipe', recipe_id=r.id) }}">{{ r.title }}</a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                <div>
+                    <article id="import-link">
+                        <header><strong>📥 Import via Web Link</strong></header>
+                        <form action="{{ url_for('recipes.import_url') }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <label for="url">Recipe Web URL</label>
+                            <input type="url" id="url" name="url" placeholder="https://example.com" required>
+                            <button type="submit">Fetch & Archive Copy</button>
+                        </form>
+                    </article>
+                    <article id="import-photo-card">
+                        <header><strong>📸 Import from Photo (OCR Book/Magazine)</strong></header>
+                        <form action="{{ url_for('recipes.import_photo') }}" method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            
+                            <label for="photo_file">Take or upload a picture of the page</label>
+                            <input type="file" id="photo_file" name="photo_file" accept="image/*" required>
+                            
+                            <button type="submit" class="secondary">Upload & Scan Text</button>
+                        </form>
+                    </article>
+                    <article id="add-manual">
+                        <header><strong>✍️ Create Recipe Manually</strong></header>
+                        <form action="{{ url_for('recipes.add_manual') }}" method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                            <label for="title">Recipe Title</label>
+                            <input type="text" id="title" name="title" required>
+                            
+                            <label for="image_file">Dish Picture (Optional)</label>
+                            <input type="file" id="image_file" name="image_file" accept="image/*">
+
+                            <label for="ingredients">Ingredients (One per line)</label>
+                            <textarea id="ingredients" name="ingredients" rows="4" required></textarea>
+                            <label for="instructions">Instructions (One step per line)</label>
+                            <textarea id="instructions" name="instructions" rows="4" required></textarea>
+                            <button type="submit" class="secondary">Save to Archive</button>
+                        </form>
+                    </article>
+                </div>
+            </div>
+        {% endif %}
+    </main>
+</body>
+</html>

@@ -1,0 +1,77 @@
+# ==========================================
+# Byte-compiled / optimized / DLL files
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==========================================
+# Virtual Environments
+# ==========================================
+.venv/
+  
+# ==========================================
+# Environment Variables & Secrets (CRITICAL)
+# ==========================================
+.env
+.secrets
+*.env
+*.secret
+
+# ==========================================
+# Distribution / Packaging / Build Artifacts
+# ==========================================
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Testing & Code Quality Caches
+# ==========================================
+.htmlcov/
+.tox/
+.nosenv/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ==========================================
+# Jupyter Notebooks Caches
+# ==========================================
+.ipynb_checkpoints
+
+# ==========================================
+# IDEs and Editors (Optional but highly recommended)
+# ==========================================
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# Project-specific
+# ==========================================
+recipes.db
+app/static/images
