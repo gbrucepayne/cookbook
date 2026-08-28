@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html Familyg="en">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Family Recipe Archive</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/pico.min.css')}}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pico.min.css') }}">
     <style>
         body { padding: 20px 0; }
         .recipe-hero-img { width: 100%; max-height: 350px; object-fit: cover; border-radius: 8px; margin-bottom: 20px; }
@@ -15,7 +15,10 @@
         .stars-display { color: #ffbc00; font-size: 1.1rem; }
         .rating-select { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
         .rating-select label { margin: 0; cursor: pointer; }
+        .ocr-loading { display: none; text-align: center; margin: 15px 0; font-weight: bold; }
+        .ocr-loading[aria-busy="true"] { display: block; }
     </style>
+    <script src="{{ url_for('static', filename="js/recipes.js") }}"></script>
 </head>
 <body>
     <main class="container">
@@ -38,8 +41,9 @@
             <nav>
                 <ul>
                     <li><a href="{{ url_for('recipes.index') }}" class="outline">Home</a></li>
-                    <li><a href="#add-manual" class="secondary">Add Manually</a></li>
-                    <li><a href="#import-link" class="secondary">Import from URL</a></li>
+                    <li><a href="#" onclick="openModal('modal-manual')" class="secondary">Add Manually</a></li>
+                    <li><a href="#" onclick="openModal('modal-url')" class="secondary">Import from URL</a></li>
+                    <li><a href="#" onclick="openModal('modal-ocr')" class="contrast">📸 Scan Pages</a></li>
                 </ul>
             </nav>
         </header>
@@ -70,6 +74,9 @@
                     <label for="image_file">Update Picture (Optional)</label>
                     <input type="file" id="image_file" name="image_file" accept="image/*">
 
+                    <label for="notes">Notes</label>
+                    <textarea id="notes" name="notes" rows="3" required>{{ recipe.notes }}</textarea>
+                    
                     <label for="ingredients">Ingredients (One per line)</label>
                     <textarea id="ingredients" name="ingredients" rows="6" required>{{ recipe.ingredients }}</textarea>
                     
@@ -92,7 +99,6 @@
                         <a href="{{ url_for('recipes.edit_recipe_form', recipe_id=recipe.id) }}" class="button secondary outline" style="padding: 5px 15px; font-size: 0.85rem;">Edit Content</a>
                     </div>
                     
-                    <!-- Rating Graphic Row -->
                     <div style="margin: 10px 0;">
                         {% if recipe.rating > 0 %}
                             <span class="stars-display">
@@ -112,7 +118,7 @@
                     {% endif %}
 
                     {% if recipe.source_url %}
-                        <p style="margin-top:10px;"><small>Archived from: <a href="{{ recipe.source_url }}" target="_bFamilyk">{{ recipe.source_url }}</a></small></p>
+                        <p style="margin-top:10px;"><small>Archived from: <a href="{{ recipe.source_url }}" target="_blank">{{ recipe.source_url }}</a></small></p>
                     {% endif %}
                 </header>
                 
@@ -148,87 +154,139 @@
 
         {# Case C: Main Home Dashboard with Filter Search Bar #}
         {% else %}
-            <!-- Interactive Family Search Module -->
             <div class="search-container">
                 <form action="{{ url_for('recipes.index') }}" method="GET" style="display: flex; gap: 10px; margin: 0;">
                     <input type="search" name="q" placeholder="Search by title or ingredient (e.g. Chicken)..." value="{{ search_query }}" style="margin:0;">
                     <button type="submit" style="width: auto; margin:0;">Search</button>
-                    {% if search_query %}
-                        <a href="{{ url_for('recipes.index') }}" class="button contrast outline" style="margin:0; white-space: nowrap;">Clear</a>
-                    {% endif %}
                 </form>
             </div>
 
+            <!-- List Grid View of Cached Recipes -->
             <div class="grid">
-                <div>
-                    <h3>
-                        {% if search_query %}
-                            Search Results ({{ recipes|length }})
-                        {% else %}
-                            Saved Recipes ({{ recipes|length }})
-                        {% endif %}
-                    </h3>
-                    {% if not recipes %}
-                        <p>No matching archived recipes found.</p>
-                    {% else %}
-                        <ul style="list-style: none; padding-left: 0;">
-                            {% for r in recipes %}
-                                <li class="recipe-item">
-                                    {% if r.image_url %}
-                                        {% if r.image_url.startswith('http') %}
-                                            <img src="{{ r.image_url }}" class="recipe-thumbnail" alt="">
-                                        {% else %}
-                                            <img src="{{ url_for('static', filename='images/' + r.image_url) }}" class="recipe-thumbnail" alt="">
-                                        {% endif %}
-                                    {% endif %}
-                                    <a href="{{ url_for('recipes.view_recipe', recipe_id=r.id) }}">{{ r.title }}</a>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                </div>
-                <div>
-                    <article id="import-link">
-                        <header><strong>📥 Import via Web Link</strong></header>
-                        <form action="{{ url_for('recipes.import_url') }}" method="POST">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <label for="url">Recipe Web URL</label>
-                            <input type="url" id="url" name="url" placeholder="https://example.com" required>
-                            <button type="submit">Fetch & Archive Copy</button>
-                        </form>
+                {% for r in recipes %}
+                    <article style="padding: 15px; margin-bottom: 10px;">
+                        <div class="recipe-item">
+                            {% if r.image_url %}
+                                <img src="{{ url_for('static', filename='images/' + r.image_url) }}" class="recipe-thumbnail" alt="">
+                            {% endif %}
+                            <a href="{{ url_for('recipes.view_recipe', recipe_id=r.id) }}"><strong>{{ r.title }}</strong></a>
+                        </div>
                     </article>
-                    <article id="import-photo-card">
-                        <header><strong>📸 Import from Photo (OCR Book/Magazine)</strong></header>
-                        <form action="{{ url_for('recipes.import_photo') }}" method="POST" enctype="multipart/form-data">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            
-                            <label for="photo_file">Take or upload a picture of the page</label>
-                            <input type="file" id="photo_file" name="photo_file" accept="image/*" required>
-                            
-                            <button type="submit" class="secondary">Upload & Scan Text</button>
-                        </form>
-                    </article>
-                    <article id="add-manual">
-                        <header><strong>✍️ Create Recipe Manually</strong></header>
-                        <form action="{{ url_for('recipes.add_manual') }}" method="POST" enctype="multipart/form-data">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    
-                            <label for="title">Recipe Title</label>
-                            <input type="text" id="title" name="title" required>
-                            
-                            <label for="image_file">Dish Picture (Optional)</label>
-                            <input type="file" id="image_file" name="image_file" accept="image/*">
-
-                            <label for="ingredients">Ingredients (One per line)</label>
-                            <textarea id="ingredients" name="ingredients" rows="4" required></textarea>
-                            <label for="instructions">Instructions (One step per line)</label>
-                            <textarea id="instructions" name="instructions" rows="4" required></textarea>
-                            <button type="submit" class="secondary">Save to Archive</button>
-                        </form>
-                    </article>
-                </div>
+                {% else %}
+                    <p>No matching archived recipes found.</p>
+                {% endfor %}
             </div>
         {% endif %}
     </main>
+
+    {# ========================================== #}
+    {#          MODAL 1: IMPORT FROM URL          #}
+    {# ========================================== #}
+    <dialog id="modal-url">
+        <article>
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeModal('modal-url')"></a>
+                <h3>🔗 Web Recipe Importer</h3>
+            </header>
+            <form action="{{ url_for('recipes.import_url') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label for="url">Recipe Web URL</label>
+                <input type="url" id="url" name="url" placeholder="https://examplecookingblog.com/recipe" required>
+                <footer>
+                    <button type="button" class="secondary" onclick="closeModal('modal-url')">Cancel</button>
+                    <button type="submit">Fetch & Archive Copy</button>
+                </footer>
+            </form>
+        </article>
+    </dialog>
+
+    {# ========================================== #}
+    {#          MODAL 2: MANUAL WORKFLOW          #}
+    {# ========================================== #}
+    <dialog id="modal-manual">
+        <article style="max-width: 700px; width: 100%;">
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeModal('modal-manual')"></a>
+                <h3>✍ Create Recipe Manually</h3>
+            </header>
+            <form id="form-manual-entry" action="{{ url_for('recipes.add_manual') }}" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <label for="m-title">Recipe Title</label>
+                <input type="text" id="m-title" name="title" required>
+
+                <div class="grid">
+                    <div>
+                        <label for="m-prep">Prep Time</label>
+                        <input type="text" id="m-prep" name="prep_time" placeholder="e.g., 15 mins">
+                    </div>
+                    <div>
+                        <label for="m-cook">Cook Time</label>
+                        <input type="text" id="m-cook" name="cook_time" placeholder="e.g., 30 mins">
+                    </div>
+                    <div>
+                        <label for="m-servings">Servings</label>
+                        <input type="text" id="m-servings" name="servings" placeholder="e.g., 4">
+                    </div>
+                </div>
+
+                <label for="m-description">Short Description</label>
+                <input type="text" id="m-description" name="description">
+
+                <label for="m-notes">Notes</label>
+                <textarea id="m-notes" name="notes" rows="2"></textarea>
+
+                <label>Recipe Rating</label>
+                <div class="rating-select">
+                    {% for i in range(0, 6) %}
+                        <label>
+                            <input type="radio" name="rating" value="{{ i }}" {% if i == 0 %}checked{% endif %}> 
+                            {% if i == 0 %}Unrated{% else %}{{ i }} ★{% endif %}
+                        </label>
+                    {% endfor %}
+                </div>
+
+                <label for="m-image">Dish Picture (Optional)</label>
+                <input type="file" id="m-image" name="image_file" accept="image/*">
+
+                <label for="m-ingredients">Ingredients (One per line)</label>
+                <textarea id="m-ingredients" name="ingredients" rows="5" required></textarea>
+
+                <label for="m-instructions">Instructions (One step per line)</label>
+                <textarea id="m-instructions" name="instructions" rows="5" required></textarea>
+
+                <footer>
+                    <button type="button" class="secondary" onclick="closeModal('modal-manual')">Cancel</button>
+                    <button type="submit">Save to Archive</button>
+                </footer>
+            </form>
+        </article>
+    </dialog>
+
+    {# ========================================== #}
+    {#         MODAL 3: SCAN MULTI-PAGE OCR       #}
+    {# ========================================== #}
+    <dialog id="modal-ocr">
+        <article style="max-width: 600px; width: 100%;">
+            <header>
+                <a href="#close" aria-label="Close" class="close" onclick="closeModal('modal-ocr')"></a>
+                <h3>📸 Multi-Page Cookbook Scanner</h3>
+            </header>
+            
+            <label for="ocr-files">Select Camera Shots / Book Pages</label>
+            <input type="file" id="ocr-files" accept="image/*" multiple required>
+            <small>Pro-tip: Hold your camera completely level with the text spread to prevent layout skewing.</small>
+            
+            <div id="ocr-status-indicator" class="ocr-loading" aria-busy="false">
+                Processing pages via engine. Please wait...
+            </div>
+
+            <footer>
+                <button type="button" class="secondary" onclick="closeModal('modal-ocr')">Cancel</button>
+                <button type="button" id="btn-trigger-ocr" onclick="executeMultiPageOCR()">Upload & Scan Text</button>
+            </footer>
+        </article>
+    </dialog>
+
 </body>
 </html>
