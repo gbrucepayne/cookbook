@@ -17,7 +17,7 @@ interpret scanned images and extract the dish image and blocks of text.
 ### Debian / Ubuntu
 ```
 sudo apt update
-sudo apt install -y tesseract-ocr libtesseract-dev
+sudo apt install -y tesseract-ocr libtesseract-dev python3-dev build-essential
 ```
 
 ### Mac OS
