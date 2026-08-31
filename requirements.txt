@@ -9,3 +9,4 @@ pillow >=12.3.0, <13.0.0
 pillow-heif >=1.5.0, <2.0.0
 numpy <2.0.0
 opencv-python-headless <4.11
+gunicorn >=26.2.0, <27.0.0
