@@ -88,12 +88,17 @@ def extract_instructions(meta: dict[str, Any]|BeautifulSoup) -> list[str]:
             if not candidate:
                 continue
             if isinstance(candidate, list):
-                if not all(isinstance(i, str) for i in candidate):
+                if all(isinstance(item, dict) for item in candidate):
+                    item_list: list[dict[str, Any]] = []
                     for item in candidate:
-                        if isinstance(item, dict) and item.get('@type') in ['HowToSection']:
-                            itemList = item.get('itemListElement')
-                            if isinstance(itemList, list):
-                                candidate = [step.get('text') for step in itemList if step.get('text')]
+                        item_type = item.get('@type')
+                        if item_type in ['HowToSection']:
+                            item_list = item.get('itemListElement')
+                            if not isinstance(item_list, list):
+                                raise ValueError(f"Unexpected structure: {candidate}")
+                        elif item_type in ['HowToStep']:
+                            item_list.append(item)
+                    candidate = [step.get('text') for step in item_list if step.get('text')]
                 else:
                     raise ValueError(f"Unexpected structure: {candidate}")
             elif isinstance(candidate, str):
@@ -245,6 +250,10 @@ def scrape_recipe_from_url(url):
         ingredients_list = []
         instructions_list = []
         image_url = None
+        servings = None
+        prep_time = None
+        cook_time = None
+        total_time = None
         
         soup = BeautifulSoup(response.content, 'html.parser')
         title_el = soup.find('h1')
@@ -262,8 +271,11 @@ def scrape_recipe_from_url(url):
                 data = json.loads(tag.string)
                 # JSON-LD can be a single dictionary or a list of schemas
                 schemas = data if isinstance(data, list) else [data]
-                if isinstance(data, dict) and 'Recipe' in data.get('@graph', []):
-                    schemas = data['@graph']
+                if isinstance(data, dict) and isinstance(data.get('@graph'), list):
+                    graph = data.get('@graph')
+                    if (all(isinstance(x, dict) for x in graph) and
+                        any(x.get('@type') == 'Recipe' for x in graph)):
+                        schemas = data['@graph']
                 for schema in schemas:
                     # Look for explicit Recipe objects
                     if schema.get('@type') == 'Recipe':
