@@ -1,0 +1,19 @@
+[Unit]
+Description=Cookbook Web Server
+After=network.target
+
+[Service]
+User=cookbook
+Group=cookbook
+WorkingDirectory=/opt/cookbook
+Environment="PATH=/opt/cookbook/.venv/bin"
+
+ExecStart=/opt/cookbook/.venv/bin/gunicorn \
+    --config /opt/cookbook/gunicorn.conf.py \
+    run:app
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
