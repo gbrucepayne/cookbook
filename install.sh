@@ -42,8 +42,8 @@ deactivate
 echo PORT=8081 >> .env
 echo "Setting up systemd cookbook.service..."
 sudo cp cookbook.service /etc/systemd/system
-sudo sed -i "s/^User=cookbook$/User=$USER/" cookbook.service
-sudo sed -i "s/^Group=cookbook$/Group=$USER/" cookbook.service
+sudo sed -i "s/^User=cookbook$/User=$USER/" /etc/systemd/system/cookbook.service
+sudo sed -i "s/^Group=cookbook$/Group=$USER/" /etc/systemd/system/cookbook.service
 
 sudo systemctl enable cookbook.service
 sudo systemctl start cookbook.service
