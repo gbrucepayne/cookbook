@@ -2,16 +2,6 @@
 
 set -e
 
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-
-if [ ! -x "$PYENV_ROOT/bin/pyenv" ]; then
-  echo "ERROR: pyenv not found at $PYENV_ROOT/bin/pyenv"
-  exit 1
-fi
-
-eval "$("$PYENV_ROOT/bin/pyenv" init -)"
-
 if ! command -v pyenv >/dev/null 2>&1; then
   echo "ERROR: pyenv initialization failed"
 fi
