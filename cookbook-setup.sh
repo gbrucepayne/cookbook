@@ -32,7 +32,9 @@ python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+python init_db.py
 deactivate
+echo PORT=8081 >> .env
 sudo cp cookbook.service /etc/systemd/system
 
 if ! id cookbook >/dev/null 2>&1; then
