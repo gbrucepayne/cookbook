@@ -4,11 +4,6 @@ set -e
 
 source ~/.env
 
-if [ -z "$GITHUB_TOKEN" ]; then
-  echo "Please set GITHUB_TOKEN environment variable in the master .env file"
-  exit 1
-fi
-
 if ! command -v pyenv >/dev/null 2>&1; then
   echo "Please install Pyenv and ensure it is in PATH"
   exit 1
@@ -19,14 +14,12 @@ if ! pyenv versions --bare | grep -q '^3\.10\.'; then
   exit 1
 fi
 
-if [ -d /opt/cookbook ]; then
-  echo "ERROR: /opt/cookbook already exists"
+if [ "$PWD" != "/opt/cookbook" ]; then
+  echo "ERROR: script must be run from /opt/cookbook"
+  echo "Current directory: $PWD"
   exit 1
 fi
 
-# TODO: shift to Git credential or SSH deploy key
-git clone https://${GITHUB_TOKEN}@github.com/gbrucepayne/cookbook.git /opt/cookbook
-cd /opt/cookbook
 pyenv local 3.10
 python -m venv .venv
 source .venv/bin/activate

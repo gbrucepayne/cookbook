@@ -14,6 +14,8 @@ All content is stored locally to prevent data loss from changes to websites or a
 The scan import functions use OCR and optionally LLM techniques to
 interpret scanned images and extract the dish image and blocks of text.
 
+Install [**pyenv**](https://github.com/pyenv/pyenv) and Python version 3.10.x
+
 ### Debian / Ubuntu
 ```
 sudo apt update
@@ -23,4 +25,13 @@ sudo apt install -y tesseract-ocr libtesseract-dev python3-dev build-essential
 ### Mac OS
 ```
 brew install tesseract
+```
+
+## Installation
+
+```
+git clone "https://github.com/gbrucepayne/cookbook.git" /opt/cookbook
+cd /opt/cookbook
+chmod +x ./install.sh
+./install.sh
 ```
