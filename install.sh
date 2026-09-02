@@ -2,8 +2,6 @@
 
 set -e
 
-source ~/.env
-
 if ! command -v pyenv >/dev/null 2>&1; then
   echo "Please install Pyenv and ensure it is in PATH"
   exit 1
