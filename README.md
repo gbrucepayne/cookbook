@@ -31,6 +31,7 @@ brew install tesseract
 
 ```
 sudo git clone "https://github.com/gbrucepayne/cookbook.git" /opt/cookbook
+sudo chown -R "$USER":"$USER" /opt/cookbook
 cd /opt/cookbook
 sudo chmod +x install.sh
 ./install.sh
