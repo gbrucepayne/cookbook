@@ -28,18 +28,24 @@ if [ "$PWD" != "/opt/cookbook" ]; then
 fi
 
 pyenv local 3.10
+PYTHON_VERSION=$(python -V)
+echo "Creating virtual environment with Python $PYTHON_VERSION..."
 python -m venv .venv
 source .venv/bin/activate
+echo "Upgrading pip..."
 pip install --upgrade pip
+echo "Installing dependencies..."
 pip install -r requirements.txt
+echo "Initializing database..."
 python init_db.py
 deactivate
 echo PORT=8081 >> .env
+echo "Setting up systemd cookbook.service..."
 sudo cp cookbook.service /etc/systemd/system
+sudo sed -i "s/^User=cookbook$/User=$USER/" cookbook.service
+sudo sed -i "s/^Group=cookbook$/Group=$USER/" cookbook.service
 
-if ! id cookbook >/dev/null 2>&1; then
-  sudo useradd --system --home /opt/cookbook --shell /usr/sbin/nologin cookbook
-fi
-sudo chown -R cookbook:cookbook /opt/cookbook
+sudo systemctl enable cookbook.service
+sudo systemctl start cookbook.service
 
 echo "Cookbook installation complete."
