@@ -77,7 +77,11 @@
 
   {% if recipe.notes and recipe.notes.strip() %}
   <span><strong>📝 Notes:</strong></span>
-  <p style="font-style: italic; color: #555;">{{ recipe.notes }}</p>
+  <ul class="recipe-note">
+    {% for note in recipe.notes.split('\n') %}
+    <li>{{ note.strip() }}</li>
+    {% endfor %}
+  </ul>
   {% endif %}
 
   <div class="grid">

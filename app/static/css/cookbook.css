@@ -84,6 +84,12 @@ body {
     padding-bottom: 2px;
 }
 
+.recipe-note {
+    font-family: 'Segoe Print', 'Segoe Script', 'Comic Sans MS', 'Apple Chancery';
+    font-style: italic;
+    color: var(--pico-primary, #dfb932);
+}
+
 .rating-select {
     display: flex;
     gap: 15px;
