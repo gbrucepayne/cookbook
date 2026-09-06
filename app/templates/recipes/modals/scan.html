@@ -1,0 +1,22 @@
+{# MODAL: SCAN MULTI-PAGE OCR #}
+<dialog id="modal-ocr">
+  <article style="max-width: 600px; width: 100%;">
+    <header>
+      <a href="#close" aria-label="Close" class="close" onclick="closeModal('modal-ocr')"></a>
+      <h3>📸 Multi-Page Cookbook Scanner</h3>
+    </header>
+
+    <label for="ocr-files">Select Camera Shots / Book Pages</label>
+    <input type="file" id="ocr-files" accept="image/*" multiple required>
+    <small>Pro-tip: Hold your camera completely level with the text spread to prevent layout skewing.</small>
+
+    <div id="ocr-status-indicator" class="ocr-loading" aria-busy="false">
+      Processing pages via engine. Please wait...
+    </div>
+
+    <footer>
+      <button type="button" class="secondary" onclick="closeModal('modal-ocr')">Cancel</button>
+      <button type="button" id="btn-trigger-ocr" onclick="executeMultiPageOCR()">Upload & Scan Text</button>
+    </footer>
+  </article>
+</dialog>

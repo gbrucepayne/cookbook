@@ -27,7 +27,7 @@ sudo apt install -y tesseract-ocr libtesseract-dev python3-dev build-essential
 brew install tesseract
 ```
 
-## Installation
+## Deployment
 
 ```
 sudo git clone "https://github.com/gbrucepayne/cookbook.git" /opt/cookbook
@@ -35,4 +35,13 @@ sudo chown -R "$USER":"$USER" /opt/cookbook
 cd /opt/cookbook
 sudo chmod +x install.sh
 ./install.sh
+```
+
+## Development
+
+```
+export FLASK_APP=run.py
+# flask db init
+# flask db migrate -m "initial database creation"
+flask db upgrade
 ```

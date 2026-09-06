@@ -1,0 +1,117 @@
+{% set recipe = recipe if recipe is defined else {} %}
+<form action="{{ form_action }}" method="POST" enctype="multipart/form-data" style="margin: 0;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <label for="title">Title</label>
+  <input type="text" 
+    id="title" name="title" 
+    value="{{ recipe.title or '' }}" 
+    placeholder="{{ 'My Recipe' if not recipe.title }}"
+    required
+  >
+
+  {% if not recipe.source_url %}
+  <label for="source_url">Source</label>
+  <input type="text" 
+    id="source_url" name="source_url"
+    value="{{ recipe.source_url or '' }}"
+    placeholder="{{ 'Publication Name' if not recipe.source_url }}"
+  >
+  {% endif %}
+
+  <label for="category">Recipe Category</label>
+  <select id="category" name="category">
+    <!-- Check against the enum string value to retain selected layout states natively -->
+    <option value="MAIN" {% if recipe.category == 'MAIN' %}selected{% endif %}>Main Course</option>
+    <option value="SIDE" {% if recipe.category == 'SIDE' %}selected{% endif %}>Side Dish</option>
+    <option value="COMPANION" {% if recipe.category == 'COMPANION' %}selected{% endif %}>Companion Item</option>
+    <option value="DESSERT" {% if recipe.category == 'DESSERT' %}selected{% endif %}>Dessert</option>
+    <option value="STARTER" {% if recipe.category == 'STARTER' %}selected{% endif %}>Starter</option>
+  </select>
+
+  <label for="companions">Companion Recipes (Hold Ctrl / Cmd to choose multiple)</label>
+  <select id="companions" name="companions" multiple style="height: 120px;">
+    {% for r in all_recipes %}
+      <!-- Prevent a recipe from listing itself as its own companion option -->
+      {% if not recipe.id or r.id != recipe.id %}
+        <option value="{{ r.id }}" 
+          {% if recipe.id and r in recipe.companions.all() %}selected{% endif %}>
+          {{ r.title }}
+        </option>
+      {% endif %}
+    {% endfor %}
+  </select>
+
+  <div class="grid">
+    <div>
+      <label for="prep_time">Prep Time (minutes)</label>
+      <input type="text" 
+        id="prep_time" name="prep_time" 
+        value="{{ recipe.prep_time or '' }}" 
+        placeholder="e.g. 15"
+      >
+    </div>
+    <div>
+      <label for="cook_time">Cook Time (minutes)</label>
+      <input type="text" 
+        id="cook_time" name="cook_time" 
+        value="{{ recipe.cook_time or '' }}" 
+        placeholder="e.g. 30"
+      >
+    </div>
+    <div>
+      <label for="total_time">Total Time (minutes)</label>
+      <input type="text" 
+        id="cook_time" name="total_time" 
+        value="{{ recipe.total_time or '' }}" 
+        placeholder="e.g. 45"
+      >
+    </div>
+    <div>
+      <label for="servings">Servings</label>
+      <input type="text" id="servings" name="servings" value="{{ recipe.servings or '' }}" placeholder="e.g. 4">
+    </div>
+  </div>
+
+  <label for="description">Short Description</label>
+  <input type="text" 
+    id="description" name="description" 
+    value="{{ recipe.description or '' }}"
+    placeholder="{{ 'None' if not recipe.description }}"
+  >
+
+  <label for="notes">📝 Notes</label>
+  <textarea id="notes" name="notes" rows="2" placeholder="{{ 'None' if not recipe.notes }}">{{ recipe.notes or '' }}</textarea>
+
+  <label>Recipe Rating</label>
+  <div class="rating-select" style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px;">
+    {% for i in range(0, 6) %}
+    <label style="margin: 0; cursor: pointer;">
+      <input type="radio" 
+        name="rating" value="{{ i }}" 
+        {% if (recipe and recipe.rating == i) or (not recipe and i == 0) %}checked{% endif %}>
+      {% if i == 0 %}Unrated{% else %}{{ i }} ★{% endif %}
+    </label>
+    {% endfor %}
+  </div>
+
+  <label for="image_file">Dish Picture {% if recipe %}(Optional Update){% else %}(Optional){% endif %}</label>
+  <input type="file" id="image_file" name="image_file" accept="image/*">
+
+  <label for="ingredients">Ingredients (One per line)</label>
+  <textarea id="ingredients" name="ingredients" rows="5" required>{{ recipe.ingredients or '' }}</textarea>
+
+  <label for="instructions">Instructions (One step per line)</label>
+  <textarea id="instructions" name="instructions" rows="5" required>{{ recipe.instructions or '' }}</textarea>
+
+  <footer>
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+      {% if is_modal %}
+        <button type="button" class="secondary" onclick="closeModal('modal-manual')" style="width: auto; margin:0;">Cancel</button>
+      {% else %}
+        <a href="{{ url_for('recipes.view_recipe', recipe_id=recipe.id) }}" class="button secondary outline" style="width: auto; margin:0;">Cancel</a>
+      {% endif %}
+      <button type="submit" style="width: auto; margin:0;">Save to Archive</button>
+    </div>
+  </footer>
+</form>

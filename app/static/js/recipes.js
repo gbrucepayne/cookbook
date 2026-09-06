@@ -8,6 +8,15 @@ function closeModal(modalId) {
   if (modal) modal.removeAttribute('open');
 }
 
+function submitScaleWithScroll() {
+  const form = document.getElementById('scale-form');
+  const scrollInput = document.getElementById('scroll-pos-input');
+  
+  // Grab the current window scroll pixel position coordinate
+  scrollInput.value = window.scrollY; 
+  form.submit();
+}
+
 async function executeMultiPageOCR() {
   const fileInput = document.getElementById('ocr-files');
   const statusIndicator = document.getElementById('ocr-status-indicator');

@@ -1,10 +1,16 @@
+"""Web Recipe scraper utilities.
+"""
+
 import json
 import logging
 import re
+from enum import Enum
 from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
+
+from .ingredient import scale_ingredient_line
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +81,8 @@ def extract_ingredients(meta: dict[str, Any]|BeautifulSoup) -> list[str]:
                         ingredients_list.append(item)
             elif candidate and candidate not in ingredients_list:
                 ingredients_list.append(candidate)
-    return ingredients_list  
+    formatted = [scale_ingredient_line(i) for i in ingredients_list]
+    return formatted
 
 
 def extract_instructions(meta: dict[str, Any]|BeautifulSoup) -> list[str]:
@@ -151,6 +158,12 @@ def extract_servings(meta: dict[str, Any]|BeautifulSoup) -> int|None:
     return servings
 
 
+class TimeType(Enum):
+    PREP = "prep"
+    COOK = "cook"
+    TOTAL = "total"
+
+    
 def _recipe_schema_time(time_val: str) -> int|None:
     """Derive time value in minutes from a Recipe Schema."""
     if isinstance(time_val, str) and time_val:
@@ -160,64 +173,31 @@ def _recipe_schema_time(time_val: str) -> int|None:
     return None
 
 
-def extract_prep_time(meta: dict[str, Any]|BeautifulSoup) -> int|None:
-    """Extract preparation time."""
-    prep_time = None
-    if isinstance(meta, dict):
+def extract_recipe_time(meta: dict[str, Any]|BeautifulSoup, time_type = TimeType.TOTAL) -> int|None:
+    """Extract the time based on tag/type."""
+    if time_type == TimeType.PREP:
         tags = ['prepTime']
-        for tag in tags:
-            candidate = meta.get(tag)
-            if candidate:
-                prep_time = _recipe_schema_time(candidate)
-                break
-    if not prep_time and isinstance(meta, BeautifulSoup):
         classes = ['wprm-recipe-prep_time-minutes']
-        for el in meta.select(_css_class_filter(classes)):
-            candidate = el.text.strip()
-            if candidate:
-                prep_time = int(re.search(r'\d+', candidate).group())
-                break
-    return prep_time
-
-
-def extract_cook_time(meta: dict[str, Any]|BeautifulSoup) -> int|None:
-    """Extract cook time."""
-    cook_time = None
-    if isinstance(meta, dict):
+    elif time_type == TimeType.COOK:
         tags = ['cookTime']
-        for tag in tags:
-            candidate = meta.get(tag)
-            if candidate:
-                cook_time = _recipe_schema_time(candidate)
-                break
-    if not cook_time and isinstance(meta, BeautifulSoup):
         classes = ['wprm-recipe-cook_time-minutes']
-        for el in meta.select(_css_class_filter(classes)):
-            candidate = el.text.strip()
-            if candidate:
-                cook_time = int(re.search(r'\d+', candidate).group())
-                break
-    return cook_time
-
-
-def extract_total_time(meta: dict[str, Any]|BeautifulSoup) -> int|None:
-    """Extract total time."""
-    total_time = None
-    if isinstance(meta, dict):
+    else:
         tags = ['totalTime']
+        classes = ['wprm-recipe-total_time-minutes']
+    timeval = None
+    if isinstance(meta, dict):
         for tag in tags:
             candidate = meta.get(tag)
             if candidate:
-                total_time = _recipe_schema_time(candidate)
+                timeval = _recipe_schema_time(candidate)
                 break
-    if not total_time and isinstance(meta, BeautifulSoup):
-        classes = ['wprm-recipe-total_time-minutes']
+    if not timeval and isinstance(meta, BeautifulSoup):
         for el in meta.select(_css_class_filter(classes)):
             candidate = el.text.strip()
             if candidate:
-                total_time = int(re.search(r'\d+', candidate).group())
+                timeval = int(re.search(r'\d+', candidate).group())
                 break
-    return total_time
+    return timeval
 
 
 def scrape_recipe_from_url(url):
@@ -283,8 +263,10 @@ def scrape_recipe_from_url(url):
                         instructions_list = extract_instructions(schema)
                         image_url = extract_image_url(schema)
                         servings = extract_servings(schema)
-                        prep_time = extract_prep_time(schema)
-                        cook_time = extract_cook_time(schema)
+                        prep_time = extract_recipe_time(schema, TimeType.PREP)
+                        cook_time = extract_recipe_time(schema, TimeType.COOK)
+                        total_time = extract_recipe_time(schema, TimeType.TOTAL)
+                        break
             except Exception as e:
                 logger.error(e)
                 continue
@@ -298,71 +280,12 @@ def scrape_recipe_from_url(url):
         if not servings:
             servings = extract_servings(soup)
         if not prep_time:
-            prep_time = extract_prep_time(soup)
+            prep_time = extract_recipe_time(soup, TimeType.PREP)
         if not cook_time:
-            cook_time = extract_cook_time(soup)
+            cook_time = extract_recipe_time(soup, TimeType.COOK)
+        if not total_time:
+            total_time = extract_recipe_time(soup, TimeType.TOTAL)
         
-        # # Select common recipe schema target classes
-        # for item in soup.find_all(['li', 'span', 'p', 'div']):
-        #     classes = ' '.join(item.get('class', [])).lower()
-        #     candidate = item.text.strip()
-        #     if not candidate:
-        #         continue
-            
-        #     if '\n' in candidate:
-        #         candidate = '\n'.join([c.strip() for c in candidate.split('\n') if c.strip()])
-                
-        #     if any(x in classes for x in ['ingredient', 'recipe-ing', 'wprm-recipe-ingredient']):
-        #         if candidate.lower() not in ['ingredients']:
-        #             ingredients_list.append(candidate)
-            
-        #     elif any(x in classes for x in ['instruction', 'step', 'direction', 'wprm-recipe-instruction', 'preparation']):
-        #         if candidate.lower() not in ['instructions', 'directions', 'preparation']:
-        #             instructions_list.append(candidate)
-            
-        #     elif any(x in classes for x in ['wprm-recipe-servings']):
-        #         if item.name == 'input' or item.has_attr('value'):
-        #             servings = item.get('value', '').strip()
-        #         elif item.has_attr('data-servings'):
-        #             servings = item.get('data-servings', '').strip()
-        #         else:
-        #             servings = candidate
-        #         servings = int(re.search(r'\d+', servings).group())
-                
-        #     elif any(x in classes for x in ['wprm-recipe-prep_time-minutes']):
-        #         prep_time = int(re.search(r'\d+', candidate).group())
-                
-        #     elif any(x in classes for x in ['wprm-recipe-cook_time-minutes']):
-        #         cook_time = int(re.search(r'\d+', candidate).group())
-                
-        # for item in soup.find_all(['li', 'p', 'div']):
-        #     classes = ' '.join(item.get('class', [])).lower()
-        #     if any(x in classes for x in ['instruction', 'step', 'direction', 'wprm-recipe-instruction']):
-        #         if item.text.strip():
-        #             instructions_list.append(item.text.strip())
-                
-        # servings_el = soup.select_one('[class*="wprm-recipe-servings"]')
-        # if servings_el:
-        #     if servings_el.name == 'input' or servings_el.has_attr('value'):
-        #         servings = servings_el.get('value', '').strip()
-        #     elif servings_el.has_attr('data-servings'):
-        #         servings = servings_el.get('data-servings', '').strip()
-        #     else:
-        #         servings = servings_el.text.strip()
-        #     servings = int(re.search(r'\d+', servings).group())
-        
-        # prep_el = soup.select_one('[class*="wprm-recipe-prep_time-minutes"]')
-        # prep_time = int(re.search(r'\d+', prep_el.text.strip()).group()) if prep_el else None
-        
-        # cook_el = soup.select_one('[class*="wprm-recipe-cook_time-minutes"]')
-        # cook_time = int(re.search(r'\d+', cook_el.text.strip()).group()) if cook_el else None
-
-        # # Fallbacks for generic markup structures
-        # if not ingredients_list:
-        #     ingredients_list = [el.text.strip() for el in soup.select('[class*="ingredient" i]') if el.text.strip()]
-        # if not instructions_list:
-        #     instructions_list = [el.text.strip() for el in soup.select('[class*="step" i], [class*="instruction" i]') if el.text.strip()]
-
         # Clean duplicates up to a reasonable cap
         ingredients = '\n'.join(list(dict.fromkeys(ingredients_list))[:40])
         instructions = '\n'.join(list(dict.fromkeys(instructions_list))[:40])
@@ -370,6 +293,14 @@ def scrape_recipe_from_url(url):
         if not ingredients: ingredients = "Auto-parsing fell short. Please edit ingredients manually."
         if not instructions: instructions = "Auto-parsing fell short. Please edit instructions manually."
 
+        if not total_time and (prep_time or cook_time):
+            if prep_time:
+                total_time = prep_time
+            if cook_time:
+                if not total_time:
+                    total_time = 0
+                total_time += cook_time
+        
         return {
             "title": title,
             "description": description,
@@ -379,7 +310,9 @@ def scrape_recipe_from_url(url):
             "servings": servings,
             "prep_time": prep_time,
             "cook_time": cook_time,
+            "total_time": total_time,
         }
+        
     except Exception as e:
         logger.error("Scraper error encountered: %s", e)
         return None

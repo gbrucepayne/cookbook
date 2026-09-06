@@ -20,7 +20,8 @@ dependencies = [
     "pillow-heif (>=1.5.0,<2.0.0)",
     "numpy (<2.0.0)",
     "opencv-python-headless (<4.11)",
-    "gunicorn (>=26.2.0,<27.0.0)"
+    "gunicorn (>=26.2.0,<27.0.0)",
+    "flask-migrate (>=4.1.0,<5.0.0)"
 ]
 
 
@@ -30,3 +31,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff.lint]
 ignore = ["BLE001", "FURB122", "SIM102"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.1.1"
+

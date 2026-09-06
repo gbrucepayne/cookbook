@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Family Recipe Archive{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pico.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cookbook.css') }}">
+  <script src="{{ url_for('static', filename='js/recipes.js') }}"></script>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <hgroup>
+        <h1>🍲 Family Recipe Archive</h1>
+        <h2>Your local cookbook server</h2>
+      </hgroup>
+
+      <!-- Global Fragments -->
+      {% include 'recipes/alerts.html' %}
+      
+      <nav>
+        <ul>
+          <li><a href="{{ url_for('recipes.index') }}" class="outline">Home</a></li>
+          <li><a href="#" onclick="openModal('modal-manual')" class="secondary">✍ Add Manually</a></li>
+          <li><a href="#" onclick="openModal('modal-url')" class="secondary">🔗 Import from URL</a></li>
+          <li><a href="#" onclick="openModal('modal-ocr')" class="secondary">📸 Scan Pages</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <!-- Child template content will render here -->
+    {% block content %}{% endblock %}
+
+  </main>
+
+</body>
+</html>

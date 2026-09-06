@@ -1,0 +1,16 @@
+{# MODAL: MANUAL ENTRY #}
+<dialog id="modal-manual">
+  <article style="max-width: 700px; width: 100%;">
+    <header>
+      <a href="#close" aria-label="Close" class="close" onclick="closeModal('modal-manual')"></a>
+      <h3>✏️ {% if recipe and recipe.title %}Edit{% else %}Create{% endif %} Recipe</h3>
+    </header>
+    {% with
+      form_action = form_action if form_action is defined else url_for('recipes.save_recipe'),
+      recipe = recipe if (recipe is defined and recipe) else None,
+      is_modal = True
+    %}
+      {% include 'recipes/partials/_form.html' %}
+    {% endwith %}
+  </article>
+</dialog>

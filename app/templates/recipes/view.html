@@ -1,0 +1,118 @@
+{% extends 'index.html' %}
+
+{% block content %}
+
+<article style="position: relative; overflow: visible;">
+  <header class="view-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="margin:0;">{{ recipe.title }}</h2>
+      <a href="#" onclick="openModal('modal-manual')" class="button secondary outline"
+        style="padding: 5px 15px; font-size: 0.85rem;">✏️ Edit</a>
+    </div>
+
+    <div>
+      <span class="stars-display"><small>
+        {{ "★" * recipe.rating }}{{ "☆" * (5 - recipe.rating) }}
+      </small></span>
+    </div>
+
+    {% if recipe.companions and recipe.companions.count() > 0 %}
+    <div>
+      <strong>Companions:</strong>
+      <ul>
+        {% for comp in recipe.companions %}
+        <li><a href="{{ url_for('recipes.view_recipe', recipe_id=comp.id) }}">{{ comp.title }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+  </header>
+
+  {% if recipe.image_url %}
+  <img src="{{ url_for('static', filename='images/' + recipe.image_url) }}" class="recipe-hero-img" alt="">
+  {% endif %}
+
+  {% if recipe.source_url %}
+  <p><small><i>
+    Source: <a href="{{ recipe.source_url }}" target="_blank">{{ recipe.source_url }}</a>
+  </i></small></p>
+  {% endif %}
+
+  {% if recipe.description %}
+    <p style="font-style: italic; color: #555;">
+      <small>{{ recipe.description }}</small>
+    </p>
+  {% endif %}
+
+  {% if recipe.notes and recipe.notes.strip() %}
+  <span><strong>📝 Notes:</strong></span>
+  <p style="font-style: italic; color: #555;">{{ recipe.notes }}</p>
+  {% endif %}
+
+  <!-- Scaling Dropdown Control Component -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <form id="scale-form"
+      method="GET" 
+      action="{{ url_for('recipes.view_recipe', recipe_id=recipe.id) }}" 
+      style="margin: 0; display: flex; align-items: center; gap: 10px;"
+    >
+      <input type="hidden" id="scroll-pos-input" name="scroll_pos" value="">
+      <label for="scale-select" style="margin: 0; white-space: nowrap; font-size: 0.85rem;">Scale:</label>
+      <select id="scale-select" name="scale" onchange="submitScaleWithScroll()" style="margin: 0; width: auto; padding: 5px 10px; font-size: 0.85rem;">
+        <option value="0.5" {% if current_scale == 0.5 %}selected{% endif %}>½x (Half)</option>
+        <option value="1.0" {% if current_scale == 1.0 %}selected{% endif %}>1x (Original)</option>
+        <option value="2.0" {% if current_scale == 2.0 %}selected{% endif %}>2x (Double)</option>
+      </select>
+    </form>
+    <span>{% if recipe.servings %}Servings: {{ recipe.servings }}{% endif %}</span>
+  </div>
+  
+  <div class="grid">
+    <div>
+      <h3>Ingredients</h3>
+      <ul>
+        {% for ing in recipe.ingredients.split('\n') %}
+        {% if ing.strip() %}<li>{{ ing }}</li>{% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+    <div>
+      <h3>Instructions</h3>
+      <ol>
+        {% for step in recipe.instructions.split('\n') %}
+        {% if step.strip() %}<li>{{ step }}</li>{% endif %}
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+  <footer>
+    <form action="{{ url_for('recipes.delete_recipe', recipe_id=recipe.id) }}" method="POST"
+      onsubmit="return confirm('Delete this local copy?');" style="margin:0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="contrast" style="width: auto; padding: 5px 15px;">Delete Recipe</button>
+    </form>
+  </footer>
+</article>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const savedScrollPos = urlParams.get('scroll_pos');
+    
+    if (savedScrollPos) {
+      // Instantly snap the viewport back to the exact layout location
+      window.scrollTo(0, parseInt(savedScrollPos, 10));
+    }
+  });
+</script>
+
+{% with 
+  form_action=url_for('recipes.save_recipe', recipe_id=recipe.id), 
+  recipe=recipe, 
+  is_modal=True 
+%}
+  {% include 'recipes/modals/manual.html' %}
+{% endwith %}
+
+{% endblock %}

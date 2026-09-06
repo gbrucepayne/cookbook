@@ -1,0 +1,20 @@
+{# MODAL: IMPORT FROM URL #}
+<dialog id="modal-url">
+  <article>
+    <header>
+      <a href="#close" aria-label="Close" class="close" onclick="closeModal('modal-url')"></a>
+      <h3>🔗 Web Recipe Importer</h3>
+    </header>
+    <form action="{{ url_for('recipes.import_url') }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="url">Recipe Web URL</label>
+      <input type="url" id="url" name="url" placeholder="https://examplecookingblog.com/recipe" required>
+      <footer>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="secondary" style="width: auto;" onclick="closeModal('modal-url')">Cancel</button>
+          <button type="submit" style="width: auto;">Fetch & Archive Copy</button>
+        </div>
+      </footer>
+    </form>
+  </article>
+</dialog>

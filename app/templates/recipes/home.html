@@ -1,0 +1,61 @@
+{% extends 'index.html' %}
+
+{% block content %}
+<div class="search-container">
+  <form action="{{ url_for('recipes.index') }}" method="GET" style="display: flex; gap: 10px; margin: 0;">
+    <input type="search" name="q" placeholder="Search by title or ingredient (e.g. Chicken)..." value="{{ search_query }}" style="margin:0;">
+    <button type="submit" style="width: auto; margin:0;">Search</button>
+  </form>
+</div>
+
+<div class="grid">
+  {% for r in recipes %}
+  <article style="padding: 15px; margin-bottom: 10px;">
+    <div class="recipe-item">
+      {% if r.image_url %}
+      <img src="{{ url_for('static', filename='images/' + r.image_url) }}" class="recipe-thumbnail" alt="">
+      {% endif %}
+      <a href="{{ url_for('recipes.view_recipe', recipe_id=r.id) }}"><strong>{{ r.title }}</strong></a>
+    </div>
+  </article>
+  {% else %}
+  <p>No matching archived recipes found.</p>
+  {% endfor %}
+</div>
+
+{% include "recipes/modals/manual.html" %}
+{% include "recipes/modals/import.html" %}
+{% include "recipes/modals/scan.html" %}
+
+<!-- Pagination Controls at the bottom of the page -->
+{% if pagination.pages > 1 %}
+<nav aria-label="pagination" style="margin-top: 30px;">
+  <ul>
+    <!-- Previous Page Link -->
+    <li>
+      {% if pagination.has_prev %}
+        <a href="{{ url_for('recipes.index', page=pagination.prev_num, q=search_query) }}" class="outline">« Prev</a>
+      {% else %}
+        <a href="#" class="outline" tabindex="-1" aria-disabled="true" style="pointer-events: none; opacity: 0.5;">« Prev</a>
+      {% endif %}
+    </li>
+
+    <!-- Page Number Info Indicator -->
+    <li>
+      <small>Page <strong>{{ pagination.page }}</strong> of {{ pagination.pages }}</small>
+    </li>
+
+    <!-- Next Page Link -->
+    <li>
+      {% if pagination.has_next %}
+        <a href="{{ url_for('recipes.index', page=pagination.next_num, q=search_query) }}" class="outline">Next »</a>
+      {% else %}
+        <a href="#" class="outline" tabindex="-1" aria-disabled="true" style="pointer-events: none; opacity: 0.5;">Next »</a>
+      {% endif %}
+    </li>
+  </ul>
+</nav>
+{% endif %}
+
+
+{% endblock %}
