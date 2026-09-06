@@ -185,7 +185,8 @@ def save_recipe(recipe_id=None):
         else:
             recipe = Recipe()
         
-        required_fields = ['title', 'ingredients', 'instructions']
+        required_fields = ['title', 'category',
+                           'ingredients', 'instructions']
         for field in required_fields:
             value = request.form.get(field, '').strip()
             if not value:

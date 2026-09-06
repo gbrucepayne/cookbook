@@ -55,6 +55,20 @@ body {
     gap: 15px;
 }
 
+.recipe-category {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 2px 12px;
+    border: 1px solid var(--pico-secondary-border, var(--pico-secondary, #555));
+    border-radius: 50px;
+    color: var(--pico-secondary, #555);
+    line-height: normal;
+    /* background-color: transparent; */
+}
+
 .stars-display {
     color: #ffbc00;
     font-size: 1.1rem;
