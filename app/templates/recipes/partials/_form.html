@@ -95,21 +95,29 @@
     {% endfor %}
   </div>
 
-  <label for="image_file">Dish Picture {% if recipe %}(Optional Update){% else %}(Optional){% endif %}</label>
+  <label for="image_file">Dish Picture <small>(Optional)</small></label>
   <input type="file" id="image_file" name="image_file" accept="image/*">
 
-  <label for="ingredients">Ingredients (One per line)</label>
+  <label for="ingredients">Ingredients <small>(One per line, use '#' for subsection title)</small></label>
   <textarea id="ingredients" name="ingredients" rows="5" required>{{ recipe.ingredients or '' }}</textarea>
 
-  <label for="instructions">Instructions (One step per line)</label>
+  <label for="instructions">Instructions <small>(One step per line, use '#' for subsection title)</small></label>
   <textarea id="instructions" name="instructions" rows="5" required>{{ recipe.instructions or '' }}</textarea>
 
   <footer>
     <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
       {% if is_modal %}
-        <button type="button" class="secondary" onclick="closeModal('modal-manual')" style="width: auto; margin:0;">Cancel</button>
+        <button type="button" class="secondary" style="width: auto; margin:0;"
+          onclick="closeModal('modal-manual')" 
+        >
+          Cancel
+        </button>
       {% else %}
-        <a href="{{ url_for('recipes.view_recipe', recipe_id=recipe.id) }}" class="button secondary outline" style="width: auto; margin:0;">Cancel</a>
+        <a href="{{ url_for('recipes.view_recipe', recipe_id=recipe.id) }}" 
+          class="button secondary outline" style="width: auto; margin:0;"
+        >
+          Cancel
+        </a>
       {% endif %}
       <button type="submit" style="width: auto; margin:0;">Save to Archive</button>
     </div>

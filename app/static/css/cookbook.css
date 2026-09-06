@@ -74,6 +74,16 @@ body {
     font-size: 1.1rem;
 }
 
+.ingredient-subsection-label {
+    margin: 20px 0 8px 0;
+    font-size: 0.95rem;
+    text-transform: capitalize;
+    letter-spacing: 0.05em;
+    /* color: var(--pico-primary, #106ba3); */
+    border-bottom: 1px dashed var(--pico-muted-border-color, #e1e1e1);
+    padding-bottom: 2px;
+}
+
 .rating-select {
     display: flex;
     gap: 15px;
