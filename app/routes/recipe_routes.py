@@ -16,7 +16,7 @@ from flask import (
 from app import db
 from app.image import download_and_cache_image, handle_image_upload
 from app.ingredient import scale_ingredient_line
-from app.models import Recipe, recipe_exists
+from app.models import Recipe, RecipeCategory, recipe_exists
 from app.ocr import extract_text_from_pages, isolate_and_crop_embedded_image
 from app.scraper import scrape_recipe_from_url
 
@@ -46,93 +46,17 @@ def allowed_file(filename):
 def get_image_folder():
     return current_app.config['IMAGE_FOLDER'] or './app/static/images'
 
-# def handle_image_upload(file_storage, prefix="manual"):
-#     """
-#     Saves an uploaded file safely. If it's a HEIC file from an iPhone,
-#     converts it to a web-friendly JPEG before writing to disk.
-#     Returns the final saved filename string.
-#     """
-#     if not file_storage or file_storage.filename == '':
-#         return None
-        
-#     filename = secure_filename(file_storage.filename)
-#     base_name, ext = os.path.splitext(filename)
-#     ext = ext.lower()
-    
-#     if ext in ['.heic', '.heif']:
-#         # Generate target name pointing to progressive web-safe jpeg
-#         target_filename = f"{prefix}_{base_name}.jpg"
-#         full_dest_path = os.path.join(current_app.config['IMAGE_FOLDER'], target_filename)
-        
-#         try:
-#             # Open HEIC file directly via pillow-heif plugin integration wrapper
-#             heif_file = pillow_heif.read_heif(file_storage.stream)
-#             image = Image.frombytes(
-#                 heif_file.mode, 
-#                 heif_file.size, 
-#                 heif_file.data, 
-#                 "raw", 
-#                 heif_file.mode, 
-#                 heif_file.stride,
-#             )
-#             # Save converted asset cleanly with high-grade compression matching web targets
-#             image.save(full_dest_path, "JPEG", quality=85)
-#             return target_filename
-#         except Exception as e:
-#             print(f"HEIC image conversion pipeline error: {e}")
-#             return None
-#     else:
-#         # Standard web file type management (JPG, PNG, WebP)
-#         target_filename = f"{prefix}_{filename}"
-#         file_storage.save(os.path.join(current_app.config['IMAGE_FOLDER'], target_filename))
-#         return target_filename
-
-
-# def download_and_cache_image(external_img_url, title=""):
-#     """
-#     Downloads an external web image and writes it locally to the server upload folder.
-#     Returns the newly created local filename string, or None if download fails.
-#     """
-#     if not external_img_url:
-#         return None
-#     try:
-#         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'}
-#         response = requests.get(external_img_url, headers=headers, timeout=10, stream=True)
-#         response.raise_for_status()
-        
-#         # Deduce file extension from URL or fallback to jpeg
-#         ext = '.jpg'
-#         for allowed_ext in current_app.config['ALLOWED_EXTENSIONS']:
-#             if f".{allowed_ext}" in external_img_url.lower():
-#                 ext = f".{allowed_ext}"
-#                 break
-                
-#         # Generate a collision-free filename asset token
-#         random_hex = secrets.token_hex(8)
-#         if title and not title.endswith("_"):
-#             title = title.replace(' ', '_').replace('-', '_').lower() + '_'
-#         local_filename = f"{title}scraped_{random_hex}{ext}"
-#         full_dest_path = os.path.join(current_app.config['IMAGE_FOLDER'], local_filename)
-            
-        
-#         # Stream the image file bits chunks safely onto server storage
-#         with open(full_dest_path, 'wb') as f:
-#             for chunk in response.iter_content(chunk_size=8192):
-#                 f.write(chunk)
-                
-#         return local_filename
-#     except Exception as e:
-#         print(f"Failed to locally archive image asset: {e}")
-#         return None
-
 
 @recipe_bp.route('/')
 def index():
     """The Home page."""
     search_query = request.args.get('q', '').strip()
+    selected_category = request.args.get('category', '').strip()
     
+    per_page = request.args.get('per_page', 10, type=int)
     page = request.args.get('page', 1, type=int)
-    per_page = 10
+    
+    query = Recipe.query
     
     if search_query:
         query = Recipe.query.filter(
@@ -140,8 +64,9 @@ def index():
             (Recipe.ingredients.ilike(f'%{search_query}%')) |
             (Recipe.description.ilike(f'%{search_query}%'))
         )
-    else:
-        query = Recipe.query
+    
+    if selected_category:
+        query = query.filter(Recipe.category == selected_category)
     
     query = query.order_by(Recipe.title.asc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -150,8 +75,11 @@ def index():
     return render_template(
         'recipes/home.html',
         recipes=recipes,
+        categories=[category.name for category in RecipeCategory],
         pagination=pagination,
         search_query=search_query,
+        selected_category=selected_category,
+        per_page=per_page,
     )
 
 

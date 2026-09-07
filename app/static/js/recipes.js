@@ -1,11 +1,17 @@
 function openModal(modalId) {
   const modal = document.getElementById(modalId);
-  if (modal) modal.setAttribute('open', 'true');
+  if (modal) {
+    // modal.setAttribute('open', 'true');
+    modal.showModal();
+  }
 }
 
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
-  if (modal) modal.removeAttribute('open');
+  if (modal) {
+    // modal.removeAttribute('open');
+    modal.close();
+  }
 }
 
 function submitScaleWithScroll() {

@@ -1,0 +1,14 @@
+<div style="display: flex; align-items: center; gap: 5px;">
+  {% if recipe.category %}
+  <span class="recipe-category">
+    {{ recipe.category.name if recipe.category.name is defined else recipe.category }}
+  </span>
+  {% endif %}
+  <div>
+    {% if recipe.rating and recipe.rating > 0 %}
+    <span class="stars-display">
+      <small>{{ "★" * recipe.rating }}{{ "☆" * (5 - recipe.rating) }}</small>
+    </span>
+    {% endif %}
+  </div>
+</div>

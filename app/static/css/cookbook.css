@@ -2,6 +2,16 @@ body {
     padding: 20px 0;
 }
 
+dialog {
+    align-items: center;
+    justify-content: center;
+}
+
+dialog > article {
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+
 .alert-banner {
     padding: 10px;
     margin-bottom: 20px;
@@ -44,6 +54,7 @@ body {
     display: flex;
     align-items: center;
     margin-bottom: 10px;
+    gap: 10px;
 }
 
 .search-container {
@@ -67,6 +78,20 @@ body {
     color: var(--pico-secondary, #555);
     line-height: normal;
     /* background-color: transparent; */
+}
+
+.filter-select-label {
+    margin: 0;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    color: var(--pico-muted-color);
+}
+
+.filter-select-dropdown {
+    margin: 0;
+    width: auto;
+    padding: 5px 30px 5px 10px;
+    font-size: 0.85rem;
 }
 
 .stars-display {
