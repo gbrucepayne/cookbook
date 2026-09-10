@@ -1,8 +1,10 @@
+"""Database models and helpers.
+"""
 import json
 from enum import Enum
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func, or_, select, inspect
+from sqlalchemy import func, inspect, or_, select
 
 db = SQLAlchemy()
 
