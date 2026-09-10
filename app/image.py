@@ -1,6 +1,6 @@
 """Image retrieval and storage helpers.
 """
-
+import logging
 import os
 import secrets
 from typing import IO
@@ -15,11 +15,13 @@ from werkzeug.utils import secure_filename
 # Register HEIF plugin with Pillow globally at module load time
 pillow_heif.register_heif_opener()
 
+logger = logging.getLogger(__name__)
+
 
 def optimize_and_save_image_stream(stream: IO[bytes],
                                    filename_base: str,
                                    target_folder: str,
-                                   prefix: str = "manual",
+                                   suffix: str = "",
                                    max_width: int = 1200,
                                    quality: int =75):
     """Optimize a file image for local storage.
@@ -33,7 +35,8 @@ def optimize_and_save_image_stream(stream: IO[bytes],
     clean_base = clean_base.replace(' ', '_').replace('-', '_').lower()
     
     # Force a unique, clean, standard .webp file name target layout
-    target_filename = f"{prefix}_{clean_base}_{random_hex}.webp"
+    if suffix: suffix = f"_{suffix}"
+    target_filename = f"{clean_base}_{random_hex}{suffix}.webp"
     full_dest_path = os.path.join(target_folder, target_filename)
 
     try:
@@ -61,13 +64,13 @@ def optimize_and_save_image_stream(stream: IO[bytes],
             return target_filename
             
     except Exception as exc:
-        print(f"Image optimization pipeline crashed: {exc}")
+        logger.error(f"Image optimization pipeline crashed: {exc}")
         return None
 
 
 def handle_image_upload(file_storage: FileStorage,
                         target_folder: str,
-                        prefix="manual"):
+                        suffix="manual"):
     """Process a direct user form upload."""
     if not file_storage or file_storage.filename == '':
         return None
@@ -77,7 +80,7 @@ def handle_image_upload(file_storage: FileStorage,
         stream=file_storage.stream, 
         filename_base=file_storage.filename, 
         target_folder=target_folder,
-        prefix=prefix,
+        suffix=suffix,
     )
 
 
@@ -118,8 +121,10 @@ def download_and_cache_image(external_img_url: str,
             stream=image_memory_stream,
             filename_base=base_title,
             target_folder=target_folder,
-            prefix="scraped",
+            suffix="scraped",
         )
     except Exception as e:
-        print(f"Failed to locally optimize and cache external link asset: {e}")
+        logger.error(
+            f"Failed to locally optimize and cache external link asset: {e}"
+        )
         return None

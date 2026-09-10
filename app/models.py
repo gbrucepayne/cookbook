@@ -1,9 +1,42 @@
+import json
 from enum import Enum
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, inspect
 
 db = SQLAlchemy()
+
+
+class LoggableModelMixin:
+    """Provides automatic dictionary serialization for SQLAlchemy models."""
+    
+    def to_dict(self) -> dict:
+        inst = inspect(self)
+        # Safely extract column attributes, bypassing SQLAlchemy's internal state
+        fields = {c.key: getattr(self, c.key) for c in inst.mapper.column_attrs}
+        
+        # Optional: Include loaded relationships if you want to see them in logs
+        for rel in inst.mapper.relationships:
+            # Only dump if the relationship is already loaded to avoid lazy-query pollution
+            if rel.key in inst.dict:
+                related_obj = getattr(self, rel.key)
+                if related_obj is None:
+                    fields[rel.key] = None
+                elif isinstance(related_obj, list):
+                    fields[rel.key] = [
+                        {c.key: getattr(item, c.key) for c in inspect(item).mapper.column_attrs}
+                        for item in related_obj
+                    ]
+                else:
+                    fields[rel.key] = {
+                        c.key: getattr(related_obj, c.key) for c in inspect(related_obj).mapper.column_attrs
+                    }
+                    
+        return fields
+
+    def to_json_str(self, indent: int = 2) -> str:
+        """Returns a cleanly formatted JSON string representation of the model."""
+        return json.dumps(self.to_dict(), indent=indent, default=str)
 
 
 class RecipeCategory(Enum):
@@ -32,7 +65,7 @@ recipe_companions = db.Table(
 )
 
 
-class Recipe(db.Model):
+class Recipe(LoggableModelMixin, db.Model):
     __tablename__ = 'recipes'
     
     id = db.Column(db.Integer, primary_key=True)
