@@ -1,5 +1,5 @@
+import logging
 import os
-import uuid
 from urllib.parse import urlparse
 
 from flask import (
@@ -14,11 +14,14 @@ from flask import (
 )
 
 from app import db
+from app.gemini import extract_recipe_genai
 from app.image import download_and_cache_image, handle_image_upload
 from app.ingredient import scale_ingredient_line
 from app.models import Recipe, RecipeCategory, recipe_exists
-from app.ocr import extract_text_from_pages, isolate_and_crop_embedded_image
+from app.ocr import extract_recipe_ocr, get_bounding_boxes
 from app.scraper import scrape_recipe_from_url
+
+logger = logging.getLogger(__name__)
 
 recipe_bp = Blueprint('recipes', __name__)
 
@@ -43,7 +46,7 @@ def allowed_file(filename):
             current_app.config['ALLOWED_EXTENSIONS'])
 
 
-def get_image_folder():
+def image_folder():
     return current_app.config['IMAGE_FOLDER'] or './app/static/images'
 
 
@@ -93,7 +96,7 @@ def view_recipe(recipe_id):
         for ing in recipe.ingredients.split('\n')
     ]
     recipe.ingredients = '\n'.join(scaled_ingredients)
-    if recipe.servings:
+    if isinstance(recipe.servings, int):
         recipe.servings = int(recipe.servings * scale_factor)
     all_recipes = Recipe.query.order_by(Recipe.title.asc()).all()
     return render_template(
@@ -115,10 +118,13 @@ def save_recipe(recipe_id=None):
         
         required_fields = ['title', 'category',
                            'ingredients', 'instructions']
+        text_lists = ['ingredients', 'instructions']
         for field in required_fields:
             value = request.form.get(field, '').strip()
-            if not value:
+            if not value or len(value) == 0:
                 raise ValueError(f"Missing recipe {field}")
+            if field in text_lists and isinstance(value, list):
+                value = '\n'.join(value)
             setattr(recipe, field, value)
             
         recipe.description = request.form.get('description') or None
@@ -139,14 +145,14 @@ def save_recipe(recipe_id=None):
             file = request.files['image_file']
             if (file and file.filename != '' and allowed_file(file.filename)):
                 filename = handle_image_upload(file,
-                                               target_folder=get_image_folder(),
-                                               prefix="manual")
+                                               target_folder=image_folder(),
+                                               suffix="manual")
                 # Remove any old/temporary source file 
                 # and point to the downloaded local/named image
                 if filename:
                     if recipe.image_url:
                         try:
-                            os.remove(os.path.join(get_image_folder(),
+                            os.remove(os.path.join(image_folder(),
                                                    recipe.image_url))
                         except OSError:
                             pass
@@ -183,7 +189,7 @@ def save_recipe(recipe_id=None):
                 companion.companions.append(recipe)
         
         db.session.commit()
-        
+        logger.info("Updated recipe %s", recipe.title)
         flash(
             f"{ICON['SUCCESS']}"
             f" <b>{recipe.title}</b> was saved successfully!",
@@ -201,46 +207,40 @@ def save_recipe(recipe_id=None):
 def import_url():
     url = request.form.get('url')
     if url:
-        extracted = scrape_recipe_from_url(url)
-        if extracted:
-            title = extracted.get('title')
-            if recipe_exists(title, url):
+        parsed_url = urlparse(url)
+        domain_name = parsed_url.netloc.lower().replace('www.', '')
+        try:
+            recipe = scrape_recipe_from_url(url)
+            if not recipe or not recipe.title:
+                raise ValueError('URL scraping failed')
+            if recipe_exists(recipe.title, url):
                 flash(
-                    f"{ICON['FAIL']} Recipe"
-                    f" <b>{title}</b> already exists.",
+                    f"{ICON['FAIL']} Duplicate <b>{recipe.title}</b>.",
                     "error"
                 )
             else:
-                parsed_url = urlparse(url)
-                domain_name = parsed_url.netloc.lower().replace('www.', '')
                 
                 # Download and save the image locally
-                local_image_name = download_and_cache_image(
-                    external_img_url=extracted.get('image_url'),
-                    target_folder=get_image_folder(),
-                    title=extracted.get('title'),
-                )
+                if recipe.image_url:
+                    recipe.image_url = download_and_cache_image(
+                        external_img_url=recipe.image_url,
+                        target_folder=image_folder(),
+                        title=recipe.title,
+                    )
                 
-                new_recipe = Recipe(
-                    title=f"{title}",
-                    source_url=url,
-                    ingredients=extracted.get('ingredients'),
-                    instructions=extracted.get('instructions'),
-                    image_url=local_image_name,   # Local filename not web URL
-                    description=extracted.get('description'),
-                    servings=extracted.get('servings'),
-                )
-                db.session.add(new_recipe)
+                db.session.add(recipe)
                 db.session.commit()
+                logger.info("Imported %s from %s",
+                            recipe.title, domain_name)
                 flash(
                     f"{ICON['SUCCESS']} Successfully imported"
-                    f" <b>{title}</b> from <i>{domain_name}</i>!",
+                    f" <b>{recipe.title}</b> from <i>{domain_name}</i>!",
                     "success"
                 )
-        else:
+        except Exception as e:
             flash(
                 f"{ICON['FAIL']} Failed to parse recipe"
-                f" from the provided URL link.",
+                f" from the provided URL link: {e}",
                 "error"
             )
     return redirect(url_for('recipes.index'))
@@ -251,52 +251,13 @@ def delete_recipe(recipe_id):
     recipe = Recipe.query.get_or_404(recipe_id)
     if recipe.image_url:
         try:
-            os.remove(os.path.join(get_image_folder(), recipe.image_url))
+            os.remove(os.path.join(image_folder(), recipe.image_url))
         except OSError:
             pass
     db.session.delete(recipe)
     db.session.commit()
+    logger.info("Deleted recipe: %s", recipe.title)
     return redirect(url_for('recipes.index'))
-
-
-@recipe_bp.route('/scan/start', methods=['POST'])
-def scan_start():
-    """Initialize a multi-page scanning session."""
-    draft_id = str(uuid.uuid4())
-    OCR_DRAFTS[draft_id] = {
-        'title': 'New Scanned Recipe',
-        'raw_chunks': [],
-        'metadata': {},
-    }
-    return jsonify({'draft_id': draft_id, 'message': 'Scan session started.'})
-
-
-@recipe_bp.route('/scan/append/<draft_id>', methods=['POST'])
-def scan_append(draft_id):
-    """Process an incoming image page and append it to the draft."""
-    if draft_id not in OCR_DRAFTS:
-        return jsonify({'error': 'Invalid or expired scanning session ID'}), 404
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image file provided'}), 400
-    image_file = request.files['image']
-    temp_path = f'/tmp/{uuid.uuid4()}.jpg'
-    image_file.save(temp_path)
-
-
-@recipe_bp.route('/scan/finish/<draft_id>', methods=['POST'])
-def scan_finish(draft_id):
-    """Combines scan pages into a final recipe."""
-    if draft_id not in OCR_DRAFTS:
-        return jsonify({'error': 'Draft not found'}), 404
-    draft = OCR_DRAFTS[draft_id]
-    complete_raw_text = "\n\n--- NEXT PAGE ---\n\n".join(draft['raw_chunks'])
-    # send to recipe parser
-    del OCR_DRAFTS[draft_id]
-    return jsonify({
-        'status': 'success',
-        'raw_text_combined': complete_raw_text,
-        # 'recipe': structured_recipe,
-    })
 
 
 @recipe_bp.route('/scan_ocr', methods=['POST'])
@@ -307,7 +268,7 @@ def scan_ocr():
     a structured JSON response to pre-populate the recipe creation form.
     """
     if 'image_files' not in request.files:
-        return jsonify({"error": "No image files provided in the request"}), 400
+        return jsonify({"error": "No image files provided in request"}), 400
         
     uploaded_files = request.files.getlist('image_files')
     
@@ -317,7 +278,6 @@ def scan_ocr():
         return jsonify({"error": "No files selected for scanning"}), 400
 
     saved_local_paths = []
-    saved_web_filenames = []
     
     try:
         # Iterate and convert/save all incoming book pages safely
@@ -327,43 +287,73 @@ def scan_ocr():
                 
             # Get the clean filename string saved into IMAGE_FOLDER
             saved_filename = handle_image_upload(file_storage,
-                                                 prefix=f"scan_p{index+1}")
+                                                 image_folder(),
+                                                 suffix=f"scan_p{index+1}")
             
             if saved_filename:
-                full_path = os.path.join(get_image_folder(), saved_filename)
+                full_path = os.path.join(image_folder(), saved_filename)
                 saved_local_paths.append(full_path)
-                saved_web_filenames.append(saved_filename)
 
         if not saved_local_paths:
             err_str = "No valid or allowed images could be processed"
             return jsonify({"error": err_str}), 400
 
-        # Fire the optimized multi-page text extraction pipeline
-        extracted_text_blob = extract_text_from_pages(saved_local_paths)
+        # First try GenAI extraction
+        recipe = extract_recipe_genai(saved_local_paths, image_folder())
+        if isinstance(recipe, Recipe):
+            for attr in ['ingredients', 'instructions']:
+                value = getattr(recipe, attr)
+                if isinstance(value, list):
+                    setattr(recipe, attr, '\n'.join(value))
+        else:
+            raise NotImplementedError("TODO: local OCR calibration/extraction")
+            # Custom local OCR settings
+            ocr_settings = {
+                'k_width': request.form.get('k_width'),
+                'k_height': request.form.get('k_height'),
+                'y_tolerance': request.form.get('y_tolerance'),
+            }
+    
+            recipe = extract_recipe_ocr(saved_local_paths,
+                                        image_folder(),
+                                        **ocr_settings)
 
-        # Shape Analysis: Attempt to isolate an illustration/photo out of Page 1
-        # Cookbook layouts typically place the dish hero photo on the first page
-        isolated_dish_image = isolate_and_crop_embedded_image(
-            source_image_path=saved_local_paths[0], 
-            upload_folder=get_image_folder(),
-        )
-
-        # If no specific inside crop was found, 
-        # fallback to the entire first page image
-        final_recipe_image = (isolated_dish_image if isolated_dish_image else 
-                              saved_web_filenames[0])
-
-        # Return structured text to the frontend editor form
-        # Interactive: the user reviews the text before hitting "Save"
-        return jsonify({
-            "status": "success",
-            "extracted_text": extracted_text_blob,
-            "assigned_image": final_recipe_image,
-            "message": (f"{ICON['SUCCESS']} Successfully processed"
-                        f" {len(saved_local_paths)} cookbook page(s)."
-            )
-        })
-
+        # If this is a brand-new recipe, add and flush it FIRST
+        # This forces the database to generate an ID for it 
+        # before linking companions
+        if recipe.id is None:
+            db.session.add(recipe)
+            # Generate recipe.id in memory without committing yet
+            db.session.flush()
+            
+        logger.debug("OCR returning: %s", recipe.to_dict())
+        return render_template('recipes/modals/manual.html',
+                               recipe=recipe,
+                               form_id='ocr-recipe-form')
+        
     except Exception as e:
-        print(f"Flask Multi-Page OCR Route failure: {e}")
-        return jsonify({"error": f"Internal server processing failure: {e}"}), 500
+        logger.error(f"Flask Multi-Page OCR Route failure: {e}")
+        return (jsonify({"error": f"Internal server processing failure: {e}"}),
+                500)
+    
+    finally:
+        for file in saved_local_paths:
+            os.remove(file)
+
+
+@recipe_bp.route('/api/ocr/calculate-layout', methods=['POST'])
+def calculate_ocr_layout():
+    """
+    Background API channel. Receives slider coordinates from the browser,
+    runs localized OpenCV contour bounding logic, and returns real-time box data.
+    """
+    raise NotImplementedError("TODO: local OCR calibration interaction")
+    data = request.get_json() or {}
+    image_filename = data.pop('image_filename', None)
+    if not image_filename:
+        raise ValueError("Missing image filename")
+    image_path = os.path.join(image_folder(), image_filename)
+    result = get_bounding_boxes(image_path, **data)
+    if not result:
+        return jsonify({ "boxes": [], "rows_count": 0 }), 400
+    return jsonify(result)

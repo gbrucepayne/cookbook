@@ -1,5 +1,9 @@
 {% set recipe = recipe if recipe is defined else {} %}
-<form action="{{ form_action }}" method="POST" enctype="multipart/form-data" style="margin: 0;">
+{% set form_id = form_id | default('default-recipe-form') %}
+<form id="{{ form_id }}" 
+  action="{{ form_action }}" method="POST" enctype="multipart/form-data" 
+  style="margin: 0;"
+>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <label for="title">Title</label>

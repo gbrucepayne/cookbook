@@ -25,7 +25,7 @@
       <div style="display: flex; align-items: center; gap: 8px;">
         <label for="per-page-select" class="filter-select-label">Show:</label>
         <select id="per-page-select" name="per_page" onchange="this.form.submit()" class="filter-select-dropdown">
-          {% for i in [10, 20, 30] %}
+          {% for i in [5, 10, 25] %}
           <option value="{{ i }}" {% if per_page == i %}selected{% endif %}>{{ i }}</option>
           {% endfor %}
         </select>

@@ -43,6 +43,14 @@ async function executeMultiPageOCR() {
     formData.append('csrf_token', csrfInput.value);
   }
 
+  // // Allow for custom local OCR parameters
+  // const kWidth = document.getElementById('val-k-width').innerText || '';
+  // const kHeight = document.getElementById('val-k-height').innerText || '';
+  // const yTolerance = document.getElementById('val-y-tol').innerText || '';
+  // if (kWidth !== '') formData.append('k_width', Number(kWidth));
+  // if (kHeight !== '') formData.append('k_height', Number(kHeight));
+  // if (yTolerance !== '') formData.append('y_tolerance', Number(yTolerance));
+
   submitBtn.disabled = true;
   statusIndicator.setAttribute('aria-busy', 'true');
 
@@ -52,18 +60,24 @@ async function executeMultiPageOCR() {
       body: formData
     });
 
-    const data = await response.json();
+    // const data = await response.json();
 
-    if (!response.ok || data.error) {
-      throw new Error(data.error || 'Parsing pipeline processing fault.');
+    if (!response.ok) {
+      throw new Error('Parsing pipeline processing fault.');
     }
+    const newModal = await response.text();
+    // console.debug(`Received HTML: ${newModal}`);
+    const oldModal = document.getElementById('modal-manual');
+    if (!oldModal) throw new Error('Target modal not found in DOM.');
 
+    // Close the scanner/wait modal before touching DOM
     closeModal('modal-ocr');
 
-    document.getElementById('m-title').placeholder = "Scanned Cookbook Entry";
-    document.getElementById('m-notes').value = data.extracted_text || '';
-    document.getElementById('m-ingredients').placeholder = "Review text data contents inside notes block above.";
-    document.getElementById('m-instructions').placeholder = "Review text data contents inside notes block above.";
+    oldModal.outerHTML = newModal;
+    // document.getElementById('title').placeholder = "Scanned Cookbook Entry";
+    // document.getElementById('notes').value = data.extracted_text || '';
+    // document.getElementById('ingredients').placeholder = "Review text data contents inside notes block above.";
+    // document.getElementById('instructions').placeholder = "Review text data contents inside notes block above.";
 
     openModal('modal-manual');
 
