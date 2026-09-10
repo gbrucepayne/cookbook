@@ -42,3 +42,5 @@ def test_scale_ingredient_line():
     assert scale_ingredient_line(example) == '3 cloves garlic, minced'
     example = '3 garlic cloves, minced'
     assert scale_ingredient_line(example, 1/3) == '1 clove garlic, minced'
+    example = 'Zest of 1 lemon'
+    assert scale_ingredient_line(example, 2) == '2 lemons zest'
