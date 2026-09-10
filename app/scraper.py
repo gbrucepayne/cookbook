@@ -4,26 +4,34 @@
 import json
 import logging
 import re
+import time
 from enum import Enum
 from typing import Any
 
-import requests
+# import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests
+from curl_cffi.requests.errors import RequestsError
+from recipe_scrapers import scrape_html
 
-from .ingredient import scale_ingredient_line
+from app.ingredient import normalize_unicode_fractions
+from app.models import Recipe
 
 logger = logging.getLogger(__name__)
 
 
-def _css_class_filter(class_list: list[str], descendant_mode: bool = True) -> str:
+def _css_class_filter(class_list: list[str],
+                      descendant_mode: bool = True) -> str:
     """
     Takes a list of class strings and turns them into a case-insensitive 
     CSS substring selector string.
     """
     # Loop through list, strip whitespaces, and format the CSS string fragment
     # The 'i' flag at the end forces case-insensitivity in modern CSS engines
-    fragments = [f'[class*="{cls.strip()}" i]' for cls in class_list if cls.strip()]
-    # Space ' ' means nesting/descendants. Empty string '' means compound selectors on one element.
+    fragments = [f'[class*="{cls.strip()}" i]' 
+                 for cls in class_list if cls.strip()]
+    # Space ' ' means nesting/descendants.
+    # Empty string '' means compound selectors on one element.
     delimiter = ' ' if descendant_mode else ''
     return delimiter.join(fragments)
 
@@ -31,6 +39,7 @@ def _css_class_filter(class_list: list[str], descendant_mode: bool = True) -> st
 def extract_image_url(meta: dict[str, Any]|BeautifulSoup) -> str|None:
     """Extract the recipe image link."""
     image_url = None
+    # Recipe Schema
     if isinstance(meta, dict):
         img_data = meta.get('image')
         if isinstance(img_data, list) and img_data:
@@ -39,22 +48,38 @@ def extract_image_url(meta: dict[str, Any]|BeautifulSoup) -> str|None:
             image_url = img_data.get('url')
         elif isinstance(img_data, str):
             image_url = img_data
+    # Fallback to soup
     if not image_url and isinstance(meta, BeautifulSoup):
         og_image = meta.find('meta', property='og:image')
         if og_image and og_image.get('content'):
             image_url = og_image['content']
         else:
-            # Fallback to the first large structural layout image within the content body
+            # Fallback to the first large structural layout image 
+            # within the content body
             img_tags = ['hero', 'recipe', 'wp-post-image']
-            img_tag = meta.find('img', class_=lambda c: c and any(x in c.lower() for x in img_tags))
+            img_tag = meta.find('img', 
+                                class_=lambda c: c and any(x in c.lower() 
+                                                           for x in img_tags))
             if img_tag and img_tag.get('src'):
                 image_url = img_tag['src']
     return image_url
 
 
-def extract_ingredients(meta: dict[str, Any]|BeautifulSoup) -> list[str]:
+def get_list_following(heading_text: str, soup: BeautifulSoup) -> list[str]:
+    tags = ['h1', 'h2', 'h3', 'h4']
+    heading = soup.find(lambda tag: tag.name in tags and 
+                        heading_text.lower() in tag.text.lower())
+    if heading:
+        target_list = heading.find_next(['ul', 'ol'])
+        if target_list:
+            return [li.text.strip() for li in target_list.find_all('li')]
+    return []
+
+
+def extract_ingredients(meta: dict[str, Any]|BeautifulSoup) -> list[str]|None:
     """Extract ingredients from a candidate text string/block."""
-    ingredients_list: list[str] = []
+    ingredients: list[str] = []
+    # Recipe Schema
     if isinstance(meta, dict):
         tags = ['recipeIngredient']
         for tag in tags:
@@ -62,32 +87,39 @@ def extract_ingredients(meta: dict[str, Any]|BeautifulSoup) -> list[str]:
             if not candidate:
                 continue
             if isinstance(candidate, list):
-                ingredients_list = list(dict.fromkeys(ingredients_list + candidate))
-            elif isinstance(candidate, str) and candidate not in ingredients_list:
-                ingredients_list.append(candidate)
+                ingredients = list(
+                    dict.fromkeys(ingredients + candidate)
+                )
+            elif isinstance(candidate, str) and candidate not in ingredients:
+                ingredients.append(candidate)
             break
-    if not ingredients_list and isinstance(meta, BeautifulSoup):
-        classes = ['ingredient', 'recipe-ing', 'wprm-recipe-ingredient']
-        section_headers = ('ingredients',)
-        for el in meta.select(_css_class_filter(classes)):
-            candidate = el.text.strip()
-            if '\n' in candidate:
-                for i, c in enumerate(candidate.split('\n')):
-                    item = c.strip()
-                    if (item and 
-                        not (i == 1 and item.lower().startswith(section_headers)) and
-                        item not in ingredients_list):
-                        # Add item
-                        ingredients_list.append(item)
-            elif candidate and candidate not in ingredients_list:
-                ingredients_list.append(candidate)
-    formatted = [scale_ingredient_line(i) for i in ingredients_list]
-    return formatted
+    # Fallback to soup
+    if not ingredients and isinstance(meta, BeautifulSoup):
+        ingredients = get_list_following('Ingredients', meta)
+        if not ingredients:
+            classes = ['ingredient', 'recipe-ing', 'wprm-recipe-ingredient']
+            section_headers = ('ingredients',)
+            for el in meta.select(_css_class_filter(classes)):
+                candidate = el.text.strip()
+                if '\n' in candidate:
+                    for i, c in enumerate(candidate.split('\n')):
+                        item = c.strip()
+                        if item:
+                            if i == 1 and item.lower().startswith(section_headers):
+                                continue
+                            if item not in ingredients:
+                                ingredients.append(item)
+                elif candidate and candidate not in ingredients:
+                    ingredients.append(candidate)
+    return '\n'.join(ingredients) if ingredients else None
+    # formatted = [scale_ingredient_line(i) for i in ingredients]
+    # return formatted
 
 
-def extract_instructions(meta: dict[str, Any]|BeautifulSoup) -> list[str]:
+def extract_instructions(meta: dict[str, Any]|BeautifulSoup) -> list[str]|None:
     """Extract instructions from a candidate text string/block."""
-    instructions_list: list[str] = []
+    instructions: list[str] = []
+    # Recipe Schema
     if isinstance(meta, dict):
         tags = ['recipeInstructions']
         for tag in tags:
@@ -102,33 +134,43 @@ def extract_instructions(meta: dict[str, Any]|BeautifulSoup) -> list[str]:
                         if item_type in ['HowToSection']:
                             item_list = item.get('itemListElement')
                             if not isinstance(item_list, list):
-                                raise ValueError(f"Unexpected structure: {candidate}")
+                                raise ValueError(
+                                    f"Unexpected structure: {candidate}"
+                                )
                         elif item_type in ['HowToStep']:
                             item_list.append(item)
-                    candidate = [step.get('text') for step in item_list if step.get('text')]
+                    candidate = [step.get('text') 
+                                 for step in item_list if step.get('text')]
                 else:
                     raise ValueError(f"Unexpected structure: {candidate}")
             elif isinstance(candidate, str):
-                candidate = [i.strip() for i in candidate.split('\n') if i.strip()]
-            instructions_list = list(dict.fromkeys(instructions_list + candidate))
+                candidate = [i.strip() 
+                             for i in candidate.split('\n') if i.strip()]
+            instructions = list(dict.fromkeys(instructions + candidate))
             break
-    if not instructions_list and isinstance(meta, BeautifulSoup):
-        classes = ['instruction', 'step', 'direction', 'wprm-recipe-instruction', 'preparation']
-        section_headers = ('instructions',)
-        step_number_pattern = r'^\s*\d+(?!\s*[\/\.])[\s\.\-\–\—:]*'
-        for el in meta.select(_css_class_filter(classes)):
-            candidate = el.text.strip()
-            if '\n' in candidate:
-                for i, c in enumerate(candidate.split('\n')):
-                    item = c.strip()
-                    if (item and 
-                        not (i == 1 and item.lower().startswith(section_headers)) and
-                        item not in instructions_list):
-                        # Add item
-                        instructions_list.append(re.sub(step_number_pattern, '', item))
-            elif candidate and candidate not in instructions_list:
-                instructions_list.append(re.sub(step_number_pattern, '', candidate))
-    return instructions_list  
+    # Fallback to soup
+    if not instructions and isinstance(meta, BeautifulSoup):
+        instructions = get_list_following('Instructions')
+        if not instructions:
+            classes = ['instruction', 'step', 'direction', 
+                    'wprm-recipe-instruction', 'preparation']
+            headers = ('instructions',)
+            step_number_pattern = r'^\s*\d+(?!\s*[\/\.])[\s\.\-\–\—:]*'
+            for el in meta.select(_css_class_filter(classes)):
+                candidate = el.text.strip()
+                if '\n' in candidate:
+                    for i, c in enumerate(candidate.split('\n')):
+                        item = c.strip()
+                        if item:
+                            if i == 1 and item.lower().startswith(headers):
+                                continue
+                            if item not in instructions:
+                                instructions.append(item)
+                elif candidate and candidate not in instructions:
+                    instructions.append(candidate)
+            instructions = [re.sub(step_number_pattern, '', instruction)
+                            for instruction in instructions]
+    return '\n'.join(instructions) if instructions else None
 
 
 def extract_servings(meta: dict[str, Any]|BeautifulSoup) -> int|None:
@@ -173,7 +215,8 @@ def _recipe_schema_time(time_val: str) -> int|None:
     return None
 
 
-def extract_recipe_time(meta: dict[str, Any]|BeautifulSoup, time_type = TimeType.TOTAL) -> int|None:
+def extract_recipe_time(meta: dict[str, Any]|BeautifulSoup,
+                        time_type = TimeType.TOTAL) -> int|None:
     """Extract the time based on tag/type."""
     if time_type == TimeType.PREP:
         tags = ['prepTime']
@@ -200,119 +243,184 @@ def extract_recipe_time(meta: dict[str, Any]|BeautifulSoup, time_type = TimeType
     return timeval
 
 
-def scrape_recipe_from_url(url):
+def extract_total_time(meta) -> int|None:
+    return extract_recipe_time(meta, TimeType.TOTAL)
+
+
+def extract_cook_time(meta) -> int|None:
+    return extract_recipe_time(meta, TimeType.COOK)
+
+
+def extract_prep_time(meta) -> int|None:
+    return extract_recipe_time(meta, TimeType.PREP)
+
+
+def scrape_recipe_from_url(url) -> Recipe:
     """
     Fetches a remote URL and attempts to parse recipe content.
-    Returns a dictionary of extracted fields, or None if it completely fails.
+    Returns a dictionary of extracted fields, 
+    or None if it completely fails.
     """
     try:
-        # Create an active network session to retain secure cookies 
-        # (This mimics how standard browsers handle handshake policies)
-        session = requests.Session()
-        # Comprehensive browser fingerprint spoofing configurations
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate',
-            'Referer': 'https://google.com',   # Makes it look like user clicked a Google link
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Cache-Control': 'max-age=0',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-        }
-        response = session.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        recipe_html = fetch_recipe_html_safe(url)
         
-        ingredients_list = []
-        instructions_list = []
-        image_url = None
-        servings = None
-        prep_time = None
-        cook_time = None
-        total_time = None
+        recipe = Recipe()
+        required = ['title', 'ingredients', 'instructions']
+        opt_text = ['image_url', 'description']
+        opt_int = ['servings', 'total_time', 'prep_time', 'cook_time']
         
-        soup = BeautifulSoup(response.content, 'html.parser')
-        title_el = soup.find('h1')
-        title = title_el.text.strip() if title_el else soup.find('meta', 'og:title')
-        if not title:
-            title = f"Imported Web Recipe ({url})"
-        desc_meta = soup.find('meta', property='og:description')
-        description = desc_meta.attrs.get('content') if desc_meta and isinstance(desc_meta.attrs, dict) else None
+        list_as_str = ['ingredients', 'instructions']
         
-        schema_tags = soup.find_all('script', type='application/ld+json')
-        for tag in schema_tags:
-            try:
-                if not tag.string:
+        try:
+            scraped = scrape_html(recipe_html,
+                                  org_url=url,
+                                  supported_only=False)
+            scraper_map = {
+                'image_url': 'image',
+                'servings': 'yields',
+            }
+            for attr in required + opt_text + opt_int:
+                func_name = scraper_map.get(attr, attr)
+                try:
+                    func = getattr(scraped, func_name, None)
+                    if func and callable(func):
+                        value = func()
+                        if attr in list_as_str and isinstance(value, list):
+                            value = '\n'.join(value)
+                        setattr(recipe, attr, value)
+                except Exception as e:
+                    logger.error(f"Failed to parse {attr}: {e}")
+            logger.debug("Parsed %s using 'recipe-scrapers' package (%s)",
+                         recipe.title, url)
+        except Exception as e:
+            logger.error(f"Unable to parse using 'recipe-scrapers': {e}")
+        
+        if not recipe.ingredients or not recipe.instructions:
+            soup = BeautifulSoup(recipe_html, 'html.parser')
+            
+            recipe.title = soup.find('meta', 'og:title') or soup.find('h1')
+            if recipe.title:
+                recipe.title = recipe.title.strip()
+            else:
+                raise ValueError(f'Unable to parse title from {url}')
+            desc_meta = soup.find('meta', property='og:description')
+            if desc_meta and isinstance(desc_meta.attrs, dict):
+                recipe.description = desc_meta.attrs.get('content')
+            
+            attrs = ['ingredients', 'instructions', 'image_url',
+                    'servings', 'total_time', 'cook_time', 'prep_time']
+
+            # Look for standardized Recipe Schema
+            schema_tags = soup.find_all('script', type='application/ld+json')
+            for tag in schema_tags:
+                try:
+                    if not tag.string:
+                        continue
+                    data = json.loads(tag.string)
+                    # JSON-LD can be a single dictionary or a list of schemas
+                    schemas = data if isinstance(data, list) else [data]
+                    if (isinstance(data, dict) and 
+                        isinstance(data.get('@graph'), list)):
+                        graph = data.get('@graph')
+                        if (all(isinstance(x, dict) for x in graph) and
+                            any(x.get('@type') == 'Recipe' for x in graph)):
+                            schemas = data['@graph']
+                    for schema in schemas:
+                        # Look for explicit Recipe objects
+                        if schema.get('@type') == 'Recipe':
+                            for attr in attrs:
+                                parsed = getattr(recipe, attr)
+                                if not parsed:
+                                    func = globals().get(f'extract_{attr}')
+                                    if func and callable(func):
+                                        setattr(recipe, attr, func(schema))
+                            break
+                    logger.debug("Parsed %s using Recipe schema (%s)",
+                                 recipe.title, url)
+                except Exception as e:
+                    logger.error(e)
                     continue
-                data = json.loads(tag.string)
-                # JSON-LD can be a single dictionary or a list of schemas
-                schemas = data if isinstance(data, list) else [data]
-                if isinstance(data, dict) and isinstance(data.get('@graph'), list):
-                    graph = data.get('@graph')
-                    if (all(isinstance(x, dict) for x in graph) and
-                        any(x.get('@type') == 'Recipe' for x in graph)):
-                        schemas = data['@graph']
-                for schema in schemas:
-                    # Look for explicit Recipe objects
-                    if schema.get('@type') == 'Recipe':
-                        ingredients_list = extract_ingredients(schema)
-                        instructions_list = extract_instructions(schema)
-                        image_url = extract_image_url(schema)
-                        servings = extract_servings(schema)
-                        prep_time = extract_recipe_time(schema, TimeType.PREP)
-                        cook_time = extract_recipe_time(schema, TimeType.COOK)
-                        total_time = extract_recipe_time(schema, TimeType.TOTAL)
-                        break
-            except Exception as e:
-                logger.error(e)
-                continue
+            
+            brute_force = False
+            for attr in attrs:
+                parsed = getattr(recipe, attr)
+                if not parsed:
+                    brute_force = True
+                    func = globals().get(f'extract_{attr}')
+                    if func and callable(func):
+                        setattr(recipe, attr, func(soup))
+            if brute_force:
+                logger.debug("Parsed %s using raw HTML tags (%s)",
+                             recipe.title, url)
         
-        if not ingredients_list:
-            ingredients_list = extract_ingredients(soup)
-        if not instructions_list:
-            instructions_list = extract_instructions(soup)
-        if not image_url:
-            image_url = extract_image_url(soup)
-        if not servings:
-            servings = extract_servings(soup)
-        if not prep_time:
-            prep_time = extract_recipe_time(soup, TimeType.PREP)
-        if not cook_time:
-            cook_time = extract_recipe_time(soup, TimeType.COOK)
-        if not total_time:
-            total_time = extract_recipe_time(soup, TimeType.TOTAL)
+        if not recipe.ingredients:
+            raise ValueError(f'Unable to parse ingredients from {url}')
+        if not recipe.instructions:
+            raise ValueError(f'Unable to parse instructions from {url}')
         
-        # Clean duplicates up to a reasonable cap
-        ingredients = '\n'.join(list(dict.fromkeys(ingredients_list))[:40])
-        instructions = '\n'.join(list(dict.fromkeys(instructions_list))[:40])
+        # Normalize ingredients format for storage
+        normal_ingredients = [normalize_unicode_fractions(ingredient)
+                              for ingredient in recipe.ingredients.split('\n')]
+        recipe.ingredients = '\n'.join(normal_ingredients)
 
-        if not ingredients: ingredients = "Auto-parsing fell short. Please edit ingredients manually."
-        if not instructions: instructions = "Auto-parsing fell short. Please edit instructions manually."
-
-        if not total_time and (prep_time or cook_time):
-            if prep_time:
-                total_time = prep_time
-            if cook_time:
-                if not total_time:
-                    total_time = 0
-                total_time += cook_time
+        for attr in opt_int:
+            value = getattr(recipe, attr, None)
+            if value and not isinstance(value, int):
+                match = re.match(r'^\s*(\d+)', value.strip())
+                value = int(match.group(1)) if match else None
+                setattr(recipe, attr, value)
         
-        return {
-            "title": title,
-            "description": description,
-            "ingredients": ingredients,
-            "instructions": instructions,
-            "image_url": image_url,
-            "servings": servings,
-            "prep_time": prep_time,
-            "cook_time": cook_time,
-            "total_time": total_time,
-        }
+        if not recipe.total_time and (recipe.prep_time or recipe.cook_time):
+            if recipe.prep_time:
+                recipe.total_time = recipe.prep_time
+            if recipe.cook_time:
+                if not recipe.total_time:
+                    recipe.total_time = 0
+                recipe.total_time += recipe.cook_time
+        
+        return recipe
         
     except Exception as e:
         logger.error("Scraper error encountered: %s", e)
         return None
+
+
+def fetch_recipe_html_safe(url: str, max_retries: int = 3) -> str:
+    """
+    Safely fetches HTML content from protected recipe domains like Food Network
+    by fully impersonating a real browser handshake and using a linear retry backoff.
+    """
+    
+    # Provide authentic browser header structures
+    headers = {
+        'Accept': 'text/html,application/xhtml+xml,'
+                  'application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://google.com',
+        'Upgrade-Insecure-Requests': '1',
+    }
+
+    # Implement a retry loop to handle micro-stalls or rate limits safely
+    for attempt in range(max_retries):
+        try:
+            # Open an impersonation session block using 'chrome' 
+            # handling TLS/JA3/HTTP2 fingerprinting
+            with requests.Session() as session:
+                response = session.get(
+                    url, 
+                    headers=headers, 
+                    impersonate="chrome",
+                    timeout=15
+                )
+                # Check for standard server-side HTTP errors
+                response.raise_for_status()
+                # Return the clean text stream layer if successful
+                return response.text
+                
+        except RequestsError as e:
+            logger.error(f"Network processing attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                # Add a brief 2-second sleep cushion before trying the fallback line again
+                time.sleep(2)
+            else:
+                raise
