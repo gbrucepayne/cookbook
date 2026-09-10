@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 from typing import Any
 
 import requests
 
 LLM_URL = os.environ.get('COOKBOOK_LLM_URL')
+
+logger = logging.getLogger(__name__)
 
 
 def parse_recipe_with_ollama(raw_text: str):
@@ -56,7 +59,7 @@ def parse_recipe_with_ollama(raw_text: str):
                 if key.lower() in recipe_data:
                     recipe_data[key.lower()] = val
         except Exception as e:
-            print(f'LLM Parsing engine failed: {e}')
+            logger.error(f'LLM Parsing engine failed: {e}')
     
     if recipe_data['title'] == "Unknown":
         raw_lines = [l for l in raw_text.split('\n') if l.strip()]
