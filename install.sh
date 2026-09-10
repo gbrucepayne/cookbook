@@ -37,7 +37,7 @@ source .venv/bin/activate
 echo "$TAG Upgrading pip..."
 pip install --upgrade pip
 echo "$TAG Installing Python dependencies..."
-pip install -r requirements.txt --timeout 120 --no-cache-dir
+TMPDIR=/opt/cookbook/pip_tmp pip install -r requirements.txt --timeout 120 --no-cache-dir
 
 echo "$TAG Initializing database..."
 export FLASK_APP=run.py
