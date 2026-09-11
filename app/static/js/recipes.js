@@ -17,7 +17,6 @@ function closeModal(modalId) {
 function submitScaleWithScroll() {
   const form = document.getElementById('scale-form');
   const scrollInput = document.getElementById('scroll-pos-input');
-  
   // Grab the current window scroll pixel position coordinate
   scrollInput.value = window.scrollY; 
   form.submit();
