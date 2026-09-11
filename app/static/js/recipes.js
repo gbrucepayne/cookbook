@@ -59,26 +59,20 @@ async function executeMultiPageOCR() {
       body: formData
     });
 
-    // const data = await response.json();
-
     if (!response.ok) {
       throw new Error('Parsing pipeline processing fault.');
     }
-    const newModal = await response.text();
+    const newModalHtml = await response.text();
     // console.debug(`Received HTML: ${newModal}`);
-    const oldModal = document.getElementById('modal-manual');
+    const oldModal = document.getElementById('modal-edit');
     if (!oldModal) throw new Error('Target modal not found in DOM.');
 
     // Close the scanner/wait modal before touching DOM
     closeModal('modal-ocr');
 
-    oldModal.outerHTML = newModal;
-    // document.getElementById('title').placeholder = "Scanned Cookbook Entry";
-    // document.getElementById('notes').value = data.extracted_text || '';
-    // document.getElementById('ingredients').placeholder = "Review text data contents inside notes block above.";
-    // document.getElementById('instructions').placeholder = "Review text data contents inside notes block above.";
+    oldModal.outerHTML = newModalHtml;
 
-    openModal('modal-manual');
+    openModal('modal-edit');
 
   } catch (err) {
     alert(`OCR Server Disconnect: ${err.message}`);

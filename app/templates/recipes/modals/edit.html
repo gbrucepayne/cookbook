@@ -6,7 +6,8 @@
       <h3>✏️ Edit Recipe</h3>
     </header>
     {% with
-      form_action = form_action if form_action is defined else url_for('recipes.save_recipe'),
+      form_action = (form_action if form_action is defined 
+        else url_for('recipes.save_recipe', recipe_id=(recipe.id if recipe is defined else None))),
       recipe = recipe if (recipe is defined and recipe) else None,
       form_id = 'recipe-edit-form',
       is_modal = True

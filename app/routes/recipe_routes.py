@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from urllib.parse import urlparse
 
 from flask import (
@@ -17,7 +18,14 @@ from app import db
 from app.gemini import extract_recipe_genai
 from app.image import download_and_cache_image, handle_image_upload
 from app.ingredient import scale_ingredient_line
-from app.models import Recipe, RecipeCategory, recipe_exists
+from app.models import (
+    Recipe,
+    RecipeCategory,
+    field_type,
+    recipe_exists,
+    required_fields,
+    valid_fields,
+)
 from app.ocr import extract_recipe_ocr, get_bounding_boxes
 from app.scraper import scrape_recipe_from_url
 
@@ -114,28 +122,26 @@ def save_recipe(recipe_id=None):
         if recipe_id:
             recipe = Recipe.query.get_or_404(recipe_id)
         else:
-            recipe = Recipe()
+            fields = {k: v for k, v in request.form.to_dict().items() 
+                      if k in valid_fields()}
+            recipe = Recipe(**fields)
         
-        required_fields = ['title', 'category',
-                           'ingredients', 'instructions']
-        text_lists = ['ingredients', 'instructions']
-        for field in required_fields:
-            value = request.form.get(field, '').strip()
+        for field in required_fields():
+            value = getattr(recipe, field)
             if not value or len(value) == 0:
-                raise ValueError(f"Missing recipe {field}")
-            if field in text_lists and isinstance(value, list):
+                raise ValueError(f"Invalid recipe {field}")
+            if field_type(field) == str and isinstance(value, list):
                 value = '\n'.join(value)
             setattr(recipe, field, value)
             
-        recipe.description = request.form.get('description') or None
-        recipe.notes = request.form.get('notes') or None
+        # recipe.description = request.form.get('description') or None
+        # recipe.notes = request.form.get('notes') or None
         
-        int_fields = ['prep_time', 'cook_time', 'total_time',
-                      'servings', 'rating']
+        int_fields = {f for f in valid_fields() if field_type(f) == int}
         for field in int_fields:
-            value = request.form.get(field, '')
-            if value.isdigit():
-                setattr(recipe, field, int(value))
+            value = int(re.sub(r'\D', '', request.form.get(field, '0')) or 0)
+            if value:
+                setattr(recipe, field, value)
         
         if not recipe.total_time:
             recipe.total_time = sum([recipe.prep_time or 0,
@@ -192,7 +198,7 @@ def save_recipe(recipe_id=None):
         logger.info("Updated recipe %s", recipe.title)
         flash(
             f"{ICON['SUCCESS']}"
-            f" <b>{recipe.title}</b> was saved successfully!",
+            f" <b>{recipe.title}</b> was saved successfully! (#{recipe.id})",
             "success"
         )
         return redirect(url_for('recipes.view_recipe',
@@ -318,16 +324,8 @@ def scan_ocr():
                                         image_folder(),
                                         **ocr_settings)
 
-        # If this is a brand-new recipe, add and flush it FIRST
-        # This forces the database to generate an ID for it 
-        # before linking companions
-        if recipe.id is None:
-            db.session.add(recipe)
-            # Generate recipe.id in memory without committing yet
-            db.session.flush()
-            
         logger.debug("OCR returning: %s", recipe.to_dict())
-        return render_template('recipes/modals/manual.html',
+        return render_template('recipes/modals/edit.html',
                                recipe=recipe,
                                form_id='ocr-recipe-form')
         

@@ -11,7 +11,7 @@ from google.genai import errors
 from PIL import Image
 
 from app.image import optimize_and_save_image_stream
-from app.models import Recipe
+from app.models import Recipe, required_fields, valid_fields
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def extract_recipe_genai(image_paths: list[str],
         "formatted exactly as [ymin, xmin, ymax, xmax] "
         "integers scaled from 0 to 1000, and the 'dish_image_index' of the page."
         "If possible also extract 'prep_time', 'cook_time' and 'total_time' "
-        "(total = preparation + cooking). "
+        "(total = preparation + cooking) in minutes. "
         "Return any text not included in the above as a notes block."
     )
     
@@ -74,13 +74,9 @@ def extract_recipe_genai(image_paths: list[str],
     if not isinstance(recipe_data, dict):
         raise TypeError(f"Unsupported data format: {response.text}")
     
-    recipe = Recipe(
-        title=recipe_data.get('title'),
-        ingredients=recipe_data.get('ingredients'),
-        instructions=recipe_data.get('instructions'),
-    )
-    required = ['title', 'ingredients', 'instructions']
-    for attr in required:
+    clean_data = {k: v for k, v in recipe_data.items() if k in valid_fields()}
+    recipe = Recipe(**clean_data)
+    for attr in required_fields():
         if not getattr(recipe, attr):
             raise ValueError(f"Invalid recipe missing {attr}")
 

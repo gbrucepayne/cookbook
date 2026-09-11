@@ -106,8 +106,10 @@
   >
     {% if recipe and recipe.image_url %}
     <img src="{{ url_for('static', filename='images/' + recipe.image_url) }}" class="recipe-thumbnail" alt="">
-    {% endif %}
+    <input type="text" id="image_file" name="image_url" style="margin-bottom: 0;" value="{{ recipe.image_url }}">
+    {% else %}
     <input type="file" id="image_file" name="image_file" accept="image/*" style="margin-bottom: 0;">
+    {% endif %}
   </div>
 
   <label for="ingredients">Ingredients <small>(One per line, use '#' for subsection title)</small></label>

@@ -2,9 +2,11 @@
 """
 import json
 from enum import Enum
+from typing import Any
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func, inspect, or_, select
+from sqlalchemy.types import Integer, String, Text
 
 db = SQLAlchemy()
 
@@ -114,3 +116,36 @@ def recipe_exists(title: str, source: str = '') -> bool:
         ))
     result = db.session.scalar(query)
     return result is not None
+
+
+def valid_fields() -> tuple[str]:
+    """Get the valid Recipe columns."""
+    mapper = inspect(Recipe)
+    return { attr.key for attr in mapper.columns }
+
+
+def required_fields() -> set[str]:
+    """Get the required Recipe columns."""
+    required = set()
+    mapper = inspect(Recipe)
+    for col in mapper.columns:
+        if (
+            not col.nullable and
+            col.default is None and
+            col.server_default is None and
+            not col.primary_key
+        ):
+            required.add(col.name)
+    return required
+
+
+def field_type(field_name: str) -> Any:
+    """Get the column type."""
+    mapper = inspect(Recipe)
+    column_types = {col.name: col.type for col in mapper.columns}
+    column_type = column_types.get(field_name)
+    if isinstance(column_type, Integer):
+        return int
+    if isinstance(column_type, (String, Text)):
+        return str
+    return None
