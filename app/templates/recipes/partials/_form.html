@@ -120,7 +120,7 @@
     <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
       {% if is_modal %}
         <button type="button" class="secondary" style="width: auto; margin:0;"
-          onclick="closeModal('modal-manual')" 
+          onclick="closeModal({{ 'modal-edit' if recipe else 'modal-manual' }})" 
         >
           Cancel
         </button>

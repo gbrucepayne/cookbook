@@ -33,6 +33,11 @@
     <!-- Child template content will render here -->
     {% block content %}{% endblock %}
 
+    {% include "recipes/modals/manual.html" %}
+    {% include "recipes/modals/import.html" %}
+    {% include "recipes/modals/scan.html" %}
+    {% include "recipes/modals/edit.html" %}
+
   </main>
 
 </body>
