@@ -14,14 +14,12 @@
     required
   >
 
-  {% if not recipe.source_url %}
   <label for="source_url">Source</label>
   <input type="text" 
     id="source_url" name="source_url"
     value="{{ recipe.source_url or '' }}"
     placeholder="{{ 'Publication Name' if not recipe.source_url }}"
   >
-  {% endif %}
 
   <label for="category">Recipe Category</label>
   <select id="category" name="category">
@@ -100,7 +98,17 @@
   </div>
 
   <label for="image_file">Dish Picture <small>(Optional)</small></label>
-  <input type="file" id="image_file" name="image_file" accept="image/*">
+  <div style="display: 
+    flex; flex-direction: row; 
+    justify-content: flex-start; 
+    align-items: center; 
+    gap: var(--pico-spacing);"
+  >
+    {% if recipe and recipe.image_url %}
+    <img src="{{ url_for('static', filename='images/' + recipe.image_url) }}" class="recipe-thumbnail" alt="">
+    {% endif %}
+    <input type="file" id="image_file" name="image_file" accept="image/*" style="margin-bottom: 0;">
+  </div>
 
   <label for="ingredients">Ingredients <small>(One per line, use '#' for subsection title)</small></label>
   <textarea id="ingredients" name="ingredients" rows="5" required>{{ recipe.ingredients or '' }}</textarea>
