@@ -264,7 +264,7 @@ def scrape_recipe_from_url(url) -> Recipe:
     try:
         recipe_html = fetch_recipe_html_safe(url)
         
-        recipe = Recipe()
+        recipe = Recipe(source_url=url)
         required = ['title', 'ingredients', 'instructions']
         opt_text = ['image_url', 'description']
         opt_int = ['servings', 'total_time', 'prep_time', 'cook_time']
