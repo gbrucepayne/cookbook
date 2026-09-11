@@ -24,6 +24,7 @@ def create_app(config_class=Config):
         root_logger.setLevel(gunicorn_logger.level)
         app.logger.handlers = gunicorn_logger.handlers
         app.logger.setLevel(gunicorn_logger.level)
+        logging.getLogger('alembic').setLevel(logging.WARNING)
     else:
         if not root_logger.handlers:
             console_handler = logging.StreamHandler()
