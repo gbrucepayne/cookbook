@@ -66,9 +66,9 @@ def extract_image_url(meta: dict[str, Any]|BeautifulSoup) -> str|None:
 
 
 def get_list_following(heading_text: str, soup: BeautifulSoup) -> list[str]:
-    tags = ['h1', 'h2', 'h3', 'h4']
+    tags = ['h1', 'h2', 'h3', 'h4', 'div']
     heading = soup.find(lambda tag: tag.name in tags and 
-                        heading_text.lower() in tag.text.lower())
+                        heading_text.strip().lower() == tag.text.strip().lower())
     if heading:
         target_list = heading.find_next(['ul', 'ol'])
         if target_list:
@@ -150,7 +150,7 @@ def extract_instructions(meta: dict[str, Any]|BeautifulSoup) -> list[str]|None:
             break
     # Fallback to soup
     if not instructions and isinstance(meta, BeautifulSoup):
-        instructions = get_list_following('Instructions')
+        instructions = get_list_following('Instructions', meta)
         if not instructions:
             classes = ['instruction', 'step', 'direction', 
                     'wprm-recipe-instruction', 'preparation']
@@ -293,14 +293,14 @@ def scrape_recipe_from_url(url) -> Recipe:
             logger.debug("Parsed %s using 'recipe-scrapers' package (%s)",
                          recipe.title, url)
         except Exception as e:
-            logger.error(f"Unable to parse using 'recipe-scrapers': {e}")
+            logger.info(f"Unable to parse using 'recipe-scrapers': {e}")
         
         if not recipe.ingredients or not recipe.instructions:
             soup = BeautifulSoup(recipe_html, 'html.parser')
             
-            recipe.title = soup.find('meta', 'og:title') or soup.find('h1')
-            if recipe.title:
-                recipe.title = recipe.title.strip()
+            title_el = soup.find('meta', 'og:title') or soup.find('h1')
+            if title_el and title_el.text:
+                recipe.title = title_el.text.strip()
             else:
                 raise ValueError(f'Unable to parse title from {url}')
             desc_meta = soup.find('meta', property='og:description')
@@ -335,8 +335,9 @@ def scrape_recipe_from_url(url) -> Recipe:
                                     if func and callable(func):
                                         setattr(recipe, attr, func(schema))
                             break
-                    logger.debug("Parsed %s using Recipe schema (%s)",
-                                 recipe.title, url)
+                        if recipe.ingredients:
+                            logger.debug("Parsed %s using Recipe schema (%s)",
+                                         recipe.title, url)
                 except Exception as e:
                     logger.error(e)
                     continue
