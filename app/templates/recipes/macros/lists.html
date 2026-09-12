@@ -1,0 +1,45 @@
+{% macro render_recipe_list(raw_text, list_type='ul') %}
+  {% if raw_text %}
+    {% set ns = namespace(in_list=false) %}
+    
+    {# Set list styles based on whether it is an ingredients or instructions layout #}
+    {% if list_type == 'ol' %}
+      {% set list_open_tag = '<ol style="margin-bottom: var(--pico-spacing);">' %}
+      {% set list_close_tag = '</ol>' %}
+    {% else %}
+      {% set list_open_tag = '<ul style="list-style-type: square; margin-bottom: var(--pico-spacing);">' %}
+      {% set list_close_tag = '</ul>' %}
+    {% endif %}
+
+    {% for line in raw_text.split('\n') %}
+      {% set clean_line = line.strip() %}
+      {% if clean_line %}
+        
+        {# Section Header Detection (Lines starting with #) #}
+        {% if clean_line.startswith('#') %}
+          {% if ns.in_list %}
+            {{ list_close_tag | safe }}
+            {% set ns.in_list = false %}
+          {% endif %}
+          <h4 class="recipe-subsection-label" style="margin-top: var(--pico-spacing); margin-bottom: calc(var(--pico-spacing) * 0.5);">
+            {{ clean_line.replace('#', '').strip() }}
+          </h4>
+        
+        {# Standard List Item Processing #}
+        {% else %}
+          {% if not ns.in_list %}
+            {{ list_open_tag | safe }}
+            {% set ns.in_list = true %}
+          {% endif %}
+          <li>{{ clean_line }}</li>
+        {% endif %}
+
+      {% endif %}
+    {% endfor %}
+
+    {# Ensure open lists are safely capped off at the end of the execution block #}
+    {% if ns.in_list %}
+      {{ list_close_tag | safe }}
+    {% endif %}
+  {% endif %}
+{% endmacro %}
