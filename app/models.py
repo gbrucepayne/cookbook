@@ -6,7 +6,10 @@ from typing import Any
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func, inspect, or_, select
-from sqlalchemy.types import Integer, String, Text
+from sqlalchemy.types import Enum as SqlEnum
+from sqlalchemy.types import Integer as SqlInteger
+from sqlalchemy.types import String as SqlString
+from sqlalchemy.types import Text as SqlText
 
 db = SQLAlchemy()
 
@@ -144,8 +147,10 @@ def field_type(field_name: str) -> Any:
     mapper = inspect(Recipe)
     column_types = {col.name: col.type for col in mapper.columns}
     column_type = column_types.get(field_name)
-    if isinstance(column_type, Integer):
+    if isinstance(column_type, SqlEnum):
+        return column_type.enum_class
+    if isinstance(column_type, SqlInteger):
         return int
-    if isinstance(column_type, (String, Text)):
+    if isinstance(column_type, (SqlString, SqlText)):
         return str
     return None

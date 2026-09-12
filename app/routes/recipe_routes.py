@@ -122,26 +122,30 @@ def save_recipe(recipe_id=None):
         if recipe_id:
             recipe = Recipe.query.get_or_404(recipe_id)
         else:
-            fields = {k: v for k, v in request.form.to_dict().items() 
-                      if k in valid_fields()}
-            recipe = Recipe(**fields)
+            recipe = Recipe()
         
+        for field, value in request.form.to_dict().items():
+            if field not in valid_fields():
+                logger.debug("Ignoring invalid field: %s", field)
+                continue
+            old_value = getattr(recipe, field)
+            if field_type(field) is str:
+                if isinstance(value, list):
+                    value = '\n'.join([f"{item}".strip() for item in value])
+                value = f"{value}".strip() or None
+            elif field_type(field) is int:
+                value = int(re.sub(r'\D', '', value) or 0) or None
+            elif field_type(field) is RecipeCategory:
+                value = RecipeCategory(value)
+            if value != old_value:
+                logger.debug("Updating %s", field)
+                setattr(recipe, field, value)
+                
+        # Validate required fields
         for field in required_fields():
             value = getattr(recipe, field)
             if not value or len(value) == 0:
                 raise ValueError(f"Invalid recipe {field}")
-            if field_type(field) == str and isinstance(value, list):
-                value = '\n'.join(value)
-            setattr(recipe, field, value)
-            
-        # recipe.description = request.form.get('description') or None
-        # recipe.notes = request.form.get('notes') or None
-        
-        int_fields = {f for f in valid_fields() if field_type(f) == int}
-        for field in int_fields:
-            value = int(re.sub(r'\D', '', request.form.get(field, '0')) or 0)
-            if value:
-                setattr(recipe, field, value)
         
         if not recipe.total_time:
             recipe.total_time = sum([recipe.prep_time or 0,
@@ -178,8 +182,7 @@ def save_recipe(recipe_id=None):
             new_companions = Recipe.query.filter(
                 Recipe.id.in_(selected_ids)).all()
 
-        # If this is a brand-new recipe, add and flush it FIRST
-        # This forces the database to generate an ID for it 
+        # If this is a brand-new recipe, add and flush it FIRST to generate ID
         # before linking companions
         if recipe_id is None:
             db.session.add(recipe)
@@ -195,14 +198,13 @@ def save_recipe(recipe_id=None):
                 companion.companions.append(recipe)
         
         db.session.commit()
-        logger.info("Updated recipe %s", recipe.title)
+        logger.info("Updated recipe %s (id: %d)", recipe.title, recipe.id)
         flash(
             f"{ICON['SUCCESS']}"
-            f" <b>{recipe.title}</b> was saved successfully! (#{recipe.id})",
+            f" <b>{recipe.title}</b> was saved successfully!",
             "success"
         )
-        return redirect(url_for('recipes.view_recipe',
-                                recipe_id=recipe.id))
+        return redirect(url_for('recipes.view_recipe', recipe_id=recipe.id))
     
     except Exception as e:
         flash(f"{ICON['FAIL']} {e}", "error")
