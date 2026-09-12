@@ -8,14 +8,18 @@ import time
 from enum import Enum
 from typing import Any
 
-# import requests
 from bs4 import BeautifulSoup
 from curl_cffi import requests
 from curl_cffi.requests.errors import RequestsError
 from recipe_scrapers import scrape_html
 
-from app.ingredient import normalize_unicode_fractions
-from app.models import Recipe
+from app.models import (
+    Recipe,
+    RecipeCategory,
+    set_field_value,
+    update_recipe_times,
+    valid_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -262,15 +266,8 @@ def scrape_recipe_from_url(url) -> Recipe:
     or None if it completely fails.
     """
     try:
-        recipe_html = fetch_recipe_html_safe(url)
-        
+        recipe_html = fetch_recipe_html_safe(url)        
         recipe = Recipe(source_url=url)
-        required = ['title', 'ingredients', 'instructions']
-        opt_text = ['image_url', 'description']
-        opt_int = ['servings', 'total_time', 'prep_time', 'cook_time']
-        
-        list_as_str = ['ingredients', 'instructions']
-        
         try:
             scraped = scrape_html(recipe_html,
                                   org_url=url,
@@ -279,17 +276,32 @@ def scrape_recipe_from_url(url) -> Recipe:
                 'image_url': 'image',
                 'servings': 'yields',
             }
-            for attr in required + opt_text + opt_int:
-                func_name = scraper_map.get(attr, attr)
+            category_map = {
+                'SNACK': RecipeCategory.DESSERT.value,
+                'SOUP': RecipeCategory.STARTER.value,
+                'APPETIZER': RecipeCategory.STARTER.value,
+            }
+            for field in valid_fields():
+                func_name = scraper_map.get(field, field)
                 try:
                     func = getattr(scraped, func_name, None)
                     if func and callable(func):
                         value = func()
-                        if attr in list_as_str and isinstance(value, list):
-                            value = '\n'.join(value)
-                        setattr(recipe, attr, value)
+                        if field == 'category':
+                            if isinstance(value, str):
+                                for cat in value.split(','):
+                                    converted = cat.upper().strip()
+                                    if converted in category_map:
+                                        converted = category_map.get(converted)
+                                    if RecipeCategory.has_value(converted):
+                                        value = RecipeCategory(converted)
+                                        break
+                            if not RecipeCategory.has_value(value):
+                                value = RecipeCategory.MAIN
+                        if value:
+                            set_field_value(recipe, field, value)
                 except Exception as e:
-                    logger.error(f"Failed to parse {attr}: {e}")
+                    logger.error(f"Failed to parse {field}: {e}")
             logger.debug("Parsed %s using 'recipe-scrapers' package (%s)",
                          recipe.title, url)
         except Exception as e:
@@ -307,9 +319,6 @@ def scrape_recipe_from_url(url) -> Recipe:
             if desc_meta and isinstance(desc_meta.attrs, dict):
                 recipe.description = desc_meta.attrs.get('content')
             
-            attrs = ['ingredients', 'instructions', 'image_url',
-                    'servings', 'total_time', 'cook_time', 'prep_time']
-
             # Look for standardized Recipe Schema
             schema_tags = soup.find_all('script', type='application/ld+json')
             for tag in schema_tags:
@@ -328,12 +337,14 @@ def scrape_recipe_from_url(url) -> Recipe:
                     for schema in schemas:
                         # Look for explicit Recipe objects
                         if schema.get('@type') == 'Recipe':
-                            for attr in attrs:
-                                parsed = getattr(recipe, attr)
+                            for field in valid_fields():
+                                parsed = getattr(recipe, field)
                                 if not parsed:
-                                    func = globals().get(f'extract_{attr}')
+                                    func = globals().get(f'extract_{field}')
                                     if func and callable(func):
-                                        setattr(recipe, attr, func(schema))
+                                        value = func(schema)
+                                        if value:
+                                            set_field_value(recipe, field, value)
                             break
                         if recipe.ingredients:
                             logger.debug("Parsed %s using Recipe schema (%s)",
@@ -342,15 +353,17 @@ def scrape_recipe_from_url(url) -> Recipe:
                     logger.error(e)
                     continue
             
-            brute_force = False
-            for attr in attrs:
-                parsed = getattr(recipe, attr)
+            raw_html = False
+            for field in valid_fields():
+                parsed = getattr(recipe, field)
                 if not parsed:
-                    brute_force = True
-                    func = globals().get(f'extract_{attr}')
+                    raw_html = True
+                    func = globals().get(f'extract_{field}')
                     if func and callable(func):
-                        setattr(recipe, attr, func(soup))
-            if brute_force:
+                        value = func(soup)
+                        if value:
+                            set_field_value(recipe, field, value)
+            if raw_html:
                 logger.debug("Parsed %s using raw HTML tags (%s)",
                              recipe.title, url)
         
@@ -359,25 +372,7 @@ def scrape_recipe_from_url(url) -> Recipe:
         if not recipe.instructions:
             raise ValueError(f'Unable to parse instructions from {url}')
         
-        # Normalize ingredients format for storage
-        normal_ingredients = [normalize_unicode_fractions(ingredient)
-                              for ingredient in recipe.ingredients.split('\n')]
-        recipe.ingredients = '\n'.join(normal_ingredients)
-
-        for attr in opt_int:
-            value = getattr(recipe, attr, None)
-            if value and not isinstance(value, int):
-                match = re.match(r'^\s*(\d+)', value.strip())
-                value = int(match.group(1)) if match else None
-                setattr(recipe, attr, value)
-        
-        if not recipe.total_time and (recipe.prep_time or recipe.cook_time):
-            if recipe.prep_time:
-                recipe.total_time = recipe.prep_time
-            if recipe.cook_time:
-                if not recipe.total_time:
-                    recipe.total_time = 0
-                recipe.total_time += recipe.cook_time
+        update_recipe_times(recipe)
         
         return recipe
         

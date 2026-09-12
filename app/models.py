@@ -1,6 +1,8 @@
 """Database models and helpers.
 """
 import json
+import logging
+import re
 from enum import Enum
 from typing import Any
 
@@ -11,7 +13,10 @@ from sqlalchemy.types import Integer as SqlInteger
 from sqlalchemy.types import String as SqlString
 from sqlalchemy.types import Text as SqlText
 
+from app.ingredient import normalize_unicode_fractions
+
 db = SQLAlchemy()
+logger = logging.getLogger(__name__)
 
 
 class LoggableModelMixin:
@@ -52,6 +57,10 @@ class RecipeCategory(Enum):
     COMPANION = 'COMPANION'
     DESSERT = 'DESSERT'
     STARTER = 'STARTER'
+    
+    @classmethod
+    def has_value(cls, val) -> bool:
+        return val in (item.value for item in cls)
 
 
 # Association table for companion recipes
@@ -154,3 +163,52 @@ def field_type(field_name: str) -> Any:
     if isinstance(column_type, (SqlString, SqlText)):
         return str
     return None
+
+
+def nullable(field_name: str) -> bool:
+    """Check if the field is nullable."""
+    mapper = inspect(Recipe)
+    for col in mapper.columns:
+        if col.name == field_name and col.nullable:
+            return True
+    return False
+
+
+def set_field_value(recipe: Recipe, field: str, value: Any) -> None:
+    """Validate and set the field value."""
+    if field not in valid_fields():
+        raise ValueError("Invalid field: %s", field)
+    old_value = getattr(recipe, field)
+    if field_type(field) is str:
+        if isinstance(value, list):
+            value = '\n'.join([f"{item}".strip() for item in value])
+        value = f"{value}".replace('\r', '').strip() or None
+        if field == 'ingredients':
+            # normalize for storage
+            value = '\n'.join([normalize_unicode_fractions(ingredient) 
+                               for ingredient in value.split('\n')])
+    elif field_type(field) is int:
+        if value and not isinstance(value, int):
+            match = re.match(r'^\s*(\d+)', value.strip())
+            value = int(match.group(1)) if match else 0
+    elif field_type(field) is RecipeCategory:
+        value = RecipeCategory(value)
+    if not value and nullable(field):
+        value = None
+    if value != old_value:
+        dbg_value = f"{value}".replace('\n', '\\n')
+        if len(dbg_value) > 25:
+            dbg_value += '...'
+        logger.debug("Updating %s = %.25s", field, dbg_value)
+        setattr(recipe, field, value)
+
+
+def update_recipe_times(recipe) -> None:
+    for field in ['prep_time', 'cook_time', 'total_time']:
+        value = getattr(recipe, field)
+        if value is not None and not value:
+            setattr(recipe, field, None)
+    if not recipe.total_time:
+        recipe.total_time = sum([recipe.prep_time or 0,
+                                 recipe.cook_time or 0]) or None
+    
