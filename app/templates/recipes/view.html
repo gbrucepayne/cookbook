@@ -7,8 +7,14 @@
   <header class="view-header">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <h2 style="margin:0;">{{ recipe.title }}</h2>
-      <a href="#" onclick="openModal('modal-edit')" class="button secondary outline"
-        style="padding: 5px 15px; font-size: 0.85rem;">✏️ Edit</a>
+      <div style="display: flex; align-items: center; gap: 5px; flex-shrink: 0;">
+        <div class="inline-cooking-mode-wrapper">
+          {% include "recipes/partials/_cooking_mode.html" %}
+        </div>
+        <a href="#" onclick="openModal('modal-edit')" class="button secondary outline edit-button">
+          ✏️ Edit
+        </a>
+      </div>
     </div>
 
     <div class="grid">

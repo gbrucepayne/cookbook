@@ -280,6 +280,7 @@ def scrape_recipe_from_url(url) -> Recipe:
                 'SNACK': RecipeCategory.DESSERT.value,
                 'SOUP': RecipeCategory.STARTER.value,
                 'APPETIZER': RecipeCategory.STARTER.value,
+                'CONDIMENT': RecipeCategory.COMPANION.value,
             }
             for field in valid_fields():
                 func_name = scraper_map.get(field, field)

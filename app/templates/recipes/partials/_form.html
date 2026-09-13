@@ -1,4 +1,5 @@
 {% set recipe = recipe if recipe is defined else {} %}
+{% set all_recipes = all_recipes if all_recipes is defined else [] %}
 {% set form_id = form_id | default('default-recipe-form') %}
 <form id="{{ form_id }}" 
   action="{{ form_action }}" method="POST" enctype="multipart/form-data" 
@@ -122,7 +123,7 @@
     <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
       {% if is_modal %}
         <button type="button" class="secondary" style="width: auto; margin:0;"
-          onclick="closeModal({{ 'modal-edit' if recipe else 'modal-manual' }})" 
+          onclick="closeModal('{{ 'modal-edit' if recipe else 'modal-manual' }}')" 
         >
           Cancel
         </button>

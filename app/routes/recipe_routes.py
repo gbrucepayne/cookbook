@@ -129,23 +129,6 @@ def save_recipe(recipe_id=None):
                 logger.debug("Ignoring invalid field: %s", field)
                 continue
             set_field_value(recipe, field, value)
-            # old_value = getattr(recipe, field)
-            # if field_type(field) is str:
-            #     if isinstance(value, list):
-            #         value = '\n'.join([f"{item}".strip() for item in value])
-            #     value = f"{value}".replace('\r', '').strip() or None
-            # elif field_type(field) is int:
-            #     value = int(re.sub(r'\D', '', value) or 0)
-            # elif field_type(field) is RecipeCategory:
-            #     value = RecipeCategory(value)
-            # if not value and nullable(field):
-            #     value = None
-            # if value != old_value:
-            #     dbg_value = f"{value}".replace('\n', '\\n')
-            #     if len(dbg_value) > 25:
-            #         dbg_value += '...'
-            #     logger.debug("Updating %s = %.25s", field, dbg_value)
-            #     setattr(recipe, field, value)
                 
         # Validate required fields
         for field in required_fields():
@@ -154,9 +137,6 @@ def save_recipe(recipe_id=None):
                 raise ValueError(f"Invalid recipe {field}")
         
         update_recipe_times(recipe)
-        # if not recipe.total_time:
-        #     recipe.total_time = sum([recipe.prep_time or 0,
-        #                              recipe.cook_time or 0]) or None
         
         if 'image_file' in request.files:
             file = request.files['image_file']

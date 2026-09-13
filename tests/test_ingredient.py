@@ -1,3 +1,4 @@
+from decimal import Decimal
 from fractions import Fraction
 
 from app.ingredient import (
@@ -10,9 +11,9 @@ from app.ingredient import (
 def test_format_fraction():
     """Test fraction formatting to unicode"""
     assert format_fraction(Fraction('1/2')) == '½'
-    assert format_fraction(Fraction('1/2'), False) == '1/2'
     assert format_fraction(Fraction('3/2')) == '1½'
     assert format_fraction(Fraction('3/2'), sep=' ') == '1 ½'
+    assert format_fraction(Fraction('2/3')) == '⅔'
 
 
 def test_normalize_unicode_fraction():
@@ -21,6 +22,7 @@ def test_normalize_unicode_fraction():
     assert normalize_unicode_fractions('1½') == '1 1/2'
     assert normalize_unicode_fractions('1½ - 2') == '1 1/2 - 2'
     assert normalize_unicode_fractions('1½-2') == '1 1/2 - 2'
+    assert normalize_unicode_fractions('0.66') == '2/3'
 
 
 def test_scale_ingredient_line():
@@ -43,4 +45,6 @@ def test_scale_ingredient_line():
     example = '3 garlic cloves, minced'
     assert scale_ingredient_line(example, 1/3) == '1 clove garlic, minced'
     example = 'Zest of 1 lemon'
-    assert scale_ingredient_line(example, 2) == '2 lemons zest'
+    assert scale_ingredient_line(example, 2) == '2 lemon zest'
+    example = '0.6667 cup stuff'
+    assert scale_ingredient_line(example, 1) == '⅔ cup stuff'

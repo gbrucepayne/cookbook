@@ -143,3 +143,59 @@ dialog > article {
 .ocr-loading[aria-busy="true"] {
     display: block;
 }
+
+.small-switch-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.small-switch-container input[type="checkbox"][role="switch"] {
+    transform: scale(0.75);
+    transform-origin: left center;
+    margin-bottom: 0;
+    width: calc(2.25rem * 0.75);
+}
+
+.edit-button {
+    padding: 5px 15px;
+    font-size: 0.85rem;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    border-bottom: none !important;
+    text-decoration: none !important;
+}
+
+.inline-cooking-mode-wrapper fieldset,
+.inline-cooking-mode-wrapper label,
+.inline-cooking-mode-wrapper input[role="switach"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.inline-cooking-mode-wrapper label {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 2px;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    color: darkgrey;
+}
+
+.inline-cooking-mode-wrapper label[data-tooltip] {
+    border-bottom: none !important;
+    text-decoration: none !important;
+}
+
+[data-tooltip]::before {
+    font-size: 0.75rem !important;
+    font-style: italic;
+    font-family: "Segoe UI", Candara, "Bitstream Vera Sans", "DejaVu Sans", sans-serif !important;
+    /* font-weight: 500; */
+    /* letter-spacing: 0.025rem; */
+    /* line-height: 1.3; */
+}

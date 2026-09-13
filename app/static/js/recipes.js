@@ -81,3 +81,84 @@ async function executeMultiPageOCR() {
     statusIndicator.setAttribute('aria-busy', 'false');
   }
 }
+
+// Global variable container to store our active screen lock handle reference
+let wakeLockHandle = null;
+
+/**
+ * Main orchestration entry point triggered by the Pico CSS switch element toggle action.
+ */
+async function toggleCookingMode(toggleInput) {
+  const statusLabel = document.getElementById('cooking-mode-status');
+
+  if (toggleInput.checked) {
+    // 1. Verify browser feature support engine coverage
+    if ('wakeLock' in navigator) {
+      try {
+        // Request screen lock token
+        wakeLockHandle = await navigator.wakeLock.request('screen');
+        
+        statusLabel.innerText = "Active: Screen lock enabled. Your iPad will stay awake.";
+        statusLabel.style.color = "var(--pico-ins-color)"; // Tint green for visual clarity
+
+        // 2. Setup automatic re-lock tracking rule
+        document.addEventListener('visibilitychange', reacquireWakeLockOnFocus);
+        
+      } catch (err) {
+        console.error(`Wake Lock failed to establish: ${err.message}`);
+        statusLabel.innerText = "Error initializing sleep blocker engine.";
+        toggleInput.checked = false;
+      }
+    } else {
+      alert("Wake Lock API is not supported on this browser version. (Requires iOS 15.6+ / Safari 16+)");
+      statusLabel.innerText = "Unsupported browser feature.";
+      toggleInput.checked = false;
+    }
+  } else {
+    // 3. User manually toggled off the behavior
+    disableCookingMode();
+  }
+}
+
+/**
+ * Safely releases the screen handle and updates the status labels.
+ */
+function disableCookingMode() {
+  const statusLabel = document.getElementById('cooking-mode-status');
+  const toggleInput = document.getElementById('cooking-mode-toggle');
+
+  if (wakeLockHandle !== null) {
+    wakeLockHandle.release().then(() => {
+      wakeLockHandle = null;
+      document.removeEventListener('visibilitychange', reacquireWakeLockOnFocus);
+      
+      if (statusLabel) {
+        statusLabel.innerText = "Inactive: Standard system auto-sleep times restored.";
+        statusLabel.style.color = "var(--pico-muted-color)";
+      }
+    });
+  }
+}
+
+/**
+ * Re-acquires the lock if the user leaves the tab and returns later.
+ */
+async function reacquireWakeLockOnFocus() {
+  const toggleInput = document.getElementById('cooking-mode-toggle');
+  
+  if (wakeLockHandle !== null && document.visibilityState === 'visible') {
+    try {
+      wakeLockHandle = await navigator.wakeLock.request('screen');
+      console.debug("Wake lock successfully re-acquired on tab refocus.");
+    } catch (err) {
+      console.error(`Failed to automatically re-secure lock asset: ${err.message}`);
+    }
+  }
+}
+
+// Run when navigating away from the active recipe view
+window.addEventListener('beforeunload', () => {
+  if (wakeLockHandle !== null) {
+    wakeLockHandle.release();
+  }
+});

@@ -44,30 +44,109 @@ UNIT_CONVERSIONS = {
 }
 
 
+def reorder_cooking_terms(text: str) -> str:
+    """
+    Transforms phrases like 'zest of 1 lemon' into '1 lemon zest' natively.
+    Works for common preparations like zest, juice, rind, peel, segment, and grated.
+    """
+    # Define common preparatory cooking terms
+    terms_pool = r"(zest|juice|peel|rind|grated\s+peel|segments?|seeds?)"
+    
+    # Pattern structures: [Term] + optional space + 'of' + optional space + [Quantity] + [Ingredient Name]
+    reorder_pattern = re.compile(rf"""
+        \b{terms_pool}\b                      # Capture Group 1: The preparatory action term
+        \s+ of \s+                             # Match the literal linking word 'of' surrounded by spaces
+        (                                      # Capture Group 2: The Quantity block
+            \d+ \s* - \s* \d+                  # Matches ranges like '1 - 2'
+            | \d*\.?\d+                        # Or standard integers/decimals like '1' or '0.5'
+            | [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]                # Or standalone unicode vulgar glyph assets
+        )
+        \s+                                    # Trailing space separation spacer
+        ([^,\n]+)                              # Capture Group 3: The targeted baseline ingredient text string
+    """, re.VERBOSE | re.IGNORECASE)
+
+    def rearrange_and_lowercase(match):
+        term = match.group(1).lower()
+        qty = match.group(2)
+        ingredient = match.group(3).strip()
+        return f"{qty} {ingredient} {term}"
+    
+    # 3. Rearrange the layout groups: \2 (Quantity) + \3 (Ingredient) + \1 (Term)
+    return reorder_pattern.sub(rearrange_and_lowercase, text.strip())
+
+
+def convert_floats_to_fractions(text: str) -> str:
+    """Convert leading quantity to a printable fraction."""
+    words = text.strip().split(' ')
+    for i, word in enumerate(words):
+        try:
+            words[i] = format_fraction(float_to_nearest_fraction(float(word)))
+        except ValueError:
+            continue
+    return ' '.join(words)
+
+
 def normalize_unicode_fractions(text: str) -> str:
     """Convert mixed elements to standard math strings 1½ becomes 1 1/2.
     Ensures both 1½ and 1 ½ are valid.
     """
-    spaced_text = re.sub(r'(?<=[\d])([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])', r' \1', text)
+    range_pattern = re.compile(r"""
+        ^                        # Match only at the start of the string
+        (                        # Start of Capture Group 1 (First Quantity)
+            \d*                  # Optional whole digits
+            \.?                  # Optional decimal point
+            \d*                  # Optional fractional digits
+            [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
+        )                        # End of Capture Group 1
+        \s* - \s*                # Match range marker ignoring surrounding spaces
+        (                        # Start of Capture Group 2 (Second Quantity)
+            \d*                  # Optional whole digits
+            \.?                  # Optional decimal point
+            \d*                  # Optional fractional digits
+            [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
+        )                        # End of Capture Group 2
+    """, re.VERBOSE)
+    single_quantity_pattern = re.compile(r"""
+        ^                        # Match only at the start of the string
+        (                        # Start of Capture Group 1
+            \d*                  # Optional whole digits
+            \.?                  # Optional decimal point
+            \d*                  # Optional fractional digits
+            [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
+        )                        # End of Capture Group 1
+        (?=[A-Za-z])             # Lookahead: followed immediately by a unit letter
+    """, re.VERBOSE)
+    cleaned = reorder_cooking_terms(text.strip())
+    cleaned = re.sub(range_pattern, r'\1 - \2', cleaned)
+    cleaned = re.sub(single_quantity_pattern, r'\1', cleaned)
+    cleaned = cleaned.replace('  ', ' ')
+    cleaned = convert_floats_to_fractions(cleaned)
+    spaced_text = re.sub(r'(?<=[\d])([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])', r' \1', cleaned)
     # Decompose the unicode characters into standard text slashes safely
-    normalized = unicodedata.normalize('NFKC', spaced_text).replace('\u2044', '/')
-    return normalized
+    normalized = unicodedata.normalize('NFKC', spaced_text)
+    return normalized.replace('\u2044', '/')
 
 
-def float_to_nearest_quarter_fraction(val: float) -> Fraction:
+def float_to_nearest_fraction(val: float, min_res: float = 1/4) -> Fraction:
     """Round float values to the nearest quarter/third fraction 
     with a min resolution of 1/4.
     """
     if val <= 0:
         return Fraction(0)
     
-    # Check closer to thirds or quarters
+    # Check closest
+    eighths = round(val * 8) / 8
     quarters = round(val * 4) / 4
     thirds = round(val * 3) / 3
+    halves = round(val * 2) / 2
     
-    if abs(val - quarters) <= abs(val - thirds):
+    if min_res < 1/4 and abs(val - eighths) <= abs(val - quarters):
+        return Fraction(eighths).limit_denominator(8)
+    if min_res < 1/3 and abs(val - quarters) <= abs(val - thirds):
         return Fraction(quarters).limit_denominator(4)
-    return Fraction(thirds).limit_denominator(3)
+    if min_res < 1/2 and abs(val - thirds) <= abs(val - halves):
+        return Fraction(thirds).limit_denominator(3)
+    return Fraction(halves).limit_denominator(2)
 
 
 def format_fraction(frac: Fraction, sep: str = '') -> str:
@@ -186,8 +265,10 @@ def scale_ingredient_line(ingredient_line: str,
                 UNIT_CONVERSIONS[singular_src]['down'][1] == final_unit):
                 ratio = UNIT_CONVERSIONS[singular_src]['down'][0]
             else:
-                ratio = (UNIT_CONVERSIONS[final_unit]['down'][0] 
-                         if final_unit in UNIT_CONVERSIONS else 1)
+                if 'down' in UNIT_CONVERSIONS.get(final_unit, {}):
+                    ratio = UNIT_CONVERSIONS[final_unit]['down'][0]
+                else:
+                    ratio = 1
                 ratio = 1 / ratio if ratio != 1 else 1
             val1 *= ratio
             if val2: 
@@ -196,11 +277,11 @@ def scale_ingredient_line(ingredient_line: str,
         final_unit = ""
 
     # Format numeric portions into crisp fractions
-    frac1 = float_to_nearest_quarter_fraction(val1)
+    frac1 = float_to_nearest_fraction(val1)
     qty_str = format_fraction(frac1, sep=sep)
     
     if val2:
-        frac2 = float_to_nearest_quarter_fraction(val2)
+        frac2 = float_to_nearest_fraction(val2)
         qty_str = f"{qty_str}-{format_fraction(frac2, sep=sep)}"
 
     # Re-apply appropriate structural pluralization layout grammar suffixes
