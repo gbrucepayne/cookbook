@@ -1,4 +1,3 @@
-from decimal import Decimal
 from fractions import Fraction
 
 from app.ingredient import (
