@@ -23,13 +23,18 @@
   >
 
   <label for="category">Recipe Category</label>
+  {% if recipe and recipe.category %}
+    {% set recipe_category = recipe.category.name %}
+  {% else %}
+    {% set recipe_category = 'MAIN' %}
+  {% endif %}
   <select id="category" name="category">
     <!-- Check against the enum string value to retain selected layout states natively -->
-    <option value="MAIN" {% if recipe.category == 'MAIN' %}selected{% endif %}>Main Course</option>
-    <option value="SIDE" {% if recipe.category == 'SIDE' %}selected{% endif %}>Side Dish</option>
-    <option value="COMPANION" {% if recipe.category == 'COMPANION' %}selected{% endif %}>Companion Item</option>
-    <option value="DESSERT" {% if recipe.category == 'DESSERT' %}selected{% endif %}>Dessert</option>
-    <option value="STARTER" {% if recipe.category == 'STARTER' %}selected{% endif %}>Starter</option>
+    <option value="MAIN" {% if recipe_category == 'MAIN' %}selected{% endif %}>Main Course</option>
+    <option value="SIDE" {% if recipe_category == 'SIDE' %}selected{% endif %}>Side Dish</option>
+    <option value="COMPANION" {% if recipe_category == 'COMPANION' %}selected{% endif %}>Companion Item</option>
+    <option value="DESSERT" {% if recipe_category == 'DESSERT' %}selected{% endif %}>Dessert</option>
+    <option value="STARTER" {% if recipe_category == 'STARTER' %}selected{% endif %}>Starter</option>
   </select>
 
   <label for="companions">Companion Recipes (Hold Ctrl / Cmd to choose multiple)</label>
