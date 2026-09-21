@@ -302,4 +302,9 @@ def scale_ingredient_line(ingredient_line: str,
 
     # Construct the final rearranged string text layout line
     components = [qty_str, final_unit, food_item]
-    return " ".join([c for c in components if c]).strip()
+    cleaned = " ".join([c for c in components if c]).strip()
+    container_masses = ['g', 'oz', 'kg', 'lb']
+    for mass in container_masses:
+        cleaned = cleaned.replace(f' {mass} ', f'{mass} ')
+    cleaned = cleaned.replace(' , ', ', ')
+    return cleaned
