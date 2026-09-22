@@ -56,6 +56,16 @@ logconfig_dict = {
             'handlers': ['console'],
             'propagate': False,
         },
+        'httpx': {
+            'level': 'WARNING',  # Suppresses the upload and API query logging info lines
+            'handlers': ['console'],
+            'propagate': False,
+        },
+        'google_genai.models': {
+            'level': 'ERROR',    # Silences the AFC recommendations warning block entirely
+            'handlers': ['console'],
+            'propagate': False,
+        },
         'gunicorn.error': {
             'level': 'WARNING',
             'handlers': ['console'],
