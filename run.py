@@ -15,3 +15,4 @@ if __name__ == '__main__':
         port=int(os.getenv('PORT', '5001')),
         debug=True,
     )
+    app.logger.info("Cookbook Web Server initialized in development mode")

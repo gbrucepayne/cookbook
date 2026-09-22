@@ -70,3 +70,11 @@ logconfig_dict = {
         }
     }
 }
+
+
+def on_starting(server):
+    """Fires exactly once when the master Gunicorn process starts up.
+    Before any of the worker processes fork.
+    """
+    logger = logging.getLogger("app")
+    logger.info("Cookbook Web Server initialized in production mode")

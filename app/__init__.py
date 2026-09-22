@@ -57,6 +57,4 @@ def create_app(config_class=Config):
     from app.routes.recipe_routes import recipe_bp
     app.register_blueprint(recipe_bp)
     
-    app.logger.info("Cookbook initialized")
-
     return app
