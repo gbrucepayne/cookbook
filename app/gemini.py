@@ -61,6 +61,7 @@ def extract_recipe_genai(image_paths: list[str],
     for attempt in range(max_retries):
         try:
             genai_model = genai_models[attempt % len(genai_models)]
+            logger.info("Querying GenAI model %s", genai_model)
             response = client.models.generate_content(
                 model=genai_model,
                 contents=[uploaded_files, prompt],
@@ -78,7 +79,8 @@ def extract_recipe_genai(image_paths: list[str],
         except errors.ServerError as e:
             if attempt == max_retries - 1:
                 raise
-            logger.error("Attempt %d failed: %s", attempt + 1, e)
+            logger.error("Attempt %d (%s) failed: %s",
+                         attempt + 1, genai_model, e)
             time.sleep(delay)
             delay *= 2
     
