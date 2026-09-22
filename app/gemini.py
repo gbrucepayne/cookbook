@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def extract_recipe_genai(image_paths: list[str],
                          image_folder: str,
                          max_retries: int = 3,
-                         initial_delay: int = 2,
+                         initial_delay: int = 3,
                          ) -> Recipe:
     """Use GenAI to attempt to extract recipe data from images."""
     client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
@@ -77,10 +77,10 @@ def extract_recipe_genai(image_paths: list[str],
             logger.debug("Gemini response: %s", response.text)
             break
         except errors.ServerError as e:
-            if attempt == max_retries - 1:
-                raise
             logger.error("Attempt %d (%s) failed: %s",
                          attempt + 1, genai_model, e)
+            if attempt == max_retries - 1:
+                raise ValueError("AI retries (%d) exhausted", max_retries)
             time.sleep(delay)
             delay *= 2
     
