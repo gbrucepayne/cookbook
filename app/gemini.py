@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def extract_recipe_genai(image_paths: list[str],
                          image_folder: str,
                          max_retries: int = 3,
-                         initial_delay: int = 3,
+                         initial_delay: int = 5,
                          ) -> Recipe:
     """Use GenAI to attempt to extract recipe data from images."""
     client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
@@ -47,9 +47,9 @@ def extract_recipe_genai(image_paths: list[str],
         "If possible, also extract 'prep_time', 'cook_time' and 'total_time' "
         "keys with values in minutes. "
         "Return any text not included in the above as a notes block. "
-        "To adhere to formatting constraints, summarize and rephrase the "
-        "extracted 'instructions' steps into clear, actionable shorthand "
-        "sentences rather than transcribing the paragraphs verbatim from the page. "
+        # "To adhere to formatting constraints, summarize and rephrase the "
+        # "extracted 'instructions' steps into clear, actionable shorthand "
+        # "sentences rather than transcribing the paragraphs verbatim from the page. "
     )
     
     delay = initial_delay
@@ -73,14 +73,14 @@ def extract_recipe_genai(image_paths: list[str],
                              genai_model,
                              response.candidates[0].finish_reason,
                              response.candidates[0].safety_ratings)
-                raise ValueError(f"AI prompt returned empty ({genai_model})")
+                raise RuntimeError(f"AI prompt returned empty ({genai_model})")
             logger.debug("Gemini response: %s", response.text)
             break
         except errors.ServerError as e:
             logger.error("Attempt %d (%s) failed: %s",
                          attempt + 1, genai_model, e)
             if attempt == max_retries - 1:
-                raise ValueError("AI retries (%d) exhausted", max_retries)
+                raise RuntimeError(f"AI retries {max_retries} exhausted")
             time.sleep(delay)
             delay *= 2
     

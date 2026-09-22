@@ -319,7 +319,7 @@ def scan_ocr():
                                form_id='ocr-recipe-form')
         
     except Exception as e:
-        logger.error(f"Flask Multi-Page OCR Route failure: {e}")
+        logger.error("Flask Multi-Page OCR Route failure: %s", e)
         return (jsonify({"error": f"Internal server processing failure: {e}"}),
                 500)
     

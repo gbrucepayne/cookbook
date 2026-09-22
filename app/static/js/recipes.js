@@ -75,7 +75,7 @@ async function executeMultiPageOCR() {
     openModal('modal-edit');
 
   } catch (err) {
-    alert(`OCR Server Disconnect: ${err.message}`);
+    alert(`OCR Server Disconnect: ${err.error || err.message}`);
   } finally {
     submitBtn.disabled = false;
     statusIndicator.setAttribute('aria-busy', 'false');

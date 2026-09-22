@@ -18,7 +18,7 @@ timeout = 60
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         log_entry = {
-            'timestamp': datetime.now(timezone.utc).isoformat() + "Z",
+            'timestamp': datetime.now(timezone.utc).isoformat()[:19] + "Z",
             'level': record.levelname,
             'logger': record.name,
             'message': record.getMessage(),
