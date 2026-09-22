@@ -46,7 +46,10 @@ def extract_recipe_genai(image_paths: list[str],
         "integers scaled from 0 to 1000, and the 'dish_image_index' of the page."
         "If possible, also extract 'prep_time', 'cook_time' and 'total_time' "
         "keys with values in minutes. "
-        "Return any text not included in the above as a notes block."
+        "Return any text not included in the above as a notes block. "
+        "To adhere to formatting constraints, summarize and rephrase the "
+        "extracted 'instructions' steps into clear, actionable shorthand "
+        "sentences rather than transcribing the paragraphs verbatim from the page. "
     )
     
     delay = initial_delay
