@@ -37,12 +37,15 @@ def extract_recipe_genai(image_paths: list[str],
         "into a single, cohesive structure (JSON). "
         "Include the recipe 'title', full 'ingredients' list, "
         "and step-by-step 'instructions' where single-quoted labels are keys. "
-        "If a completed dish image is identifiable provide its exact normalized "
+        "When extracting ingredients, convert any single-character unicode "
+        "fractions (like ¼, ½) into plain text slash formats (like 1/4, 1/2) "
+        "before serializing the text into the JSON structure. "
+        "If a completed dish image is identifiable, provide its exact normalized "
         "bounding box coordinates under a 'dish_image_box' key "
         "formatted exactly as [ymin, xmin, ymax, xmax] "
         "integers scaled from 0 to 1000, and the 'dish_image_index' of the page."
-        "If possible also extract 'prep_time', 'cook_time' and 'total_time' "
-        "(total = preparation + cooking) in minutes. "
+        "If possible, also extract 'prep_time', 'cook_time' and 'total_time' "
+        "keys with values in minutes. "
         "Return any text not included in the above as a notes block."
     )
     
@@ -62,6 +65,10 @@ def extract_recipe_genai(image_paths: list[str],
                 config={'response_mime_type': 'application/json'},
             )
             if not response.text:
+                logger.error("Model %s returned empty. Finish: %s. Safety: %s",
+                             genai_model,
+                             response.candidates[0].finish_reason,
+                             response.candidates[0].safety_ratings)
                 raise ValueError(f"AI prompt returned empty ({genai_model})")
             logger.debug("Gemini response: %s", response.text)
             break
