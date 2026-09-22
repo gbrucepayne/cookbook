@@ -147,7 +147,7 @@ class GenericScraper(AbstractScraper):
                 break
         # Fallback to soup
         if not ingredients:
-            ingredients = get_list_following('Ingredients')
+            ingredients = get_list_following('Ingredients', self.soup)
             if not ingredients:
                 classes = ['ingredient', 'recipe-ing', 'wprm-recipe-ingredient']
                 section_headers = ('ingredients',)
@@ -200,7 +200,7 @@ class GenericScraper(AbstractScraper):
         if not instructions:
             headings = ['Instructions', 'Method']
             for heading in headings:
-                instructions = get_list_following(heading)
+                instructions = get_list_following(heading, self.soup)
                 if instructions: break
             if not instructions:
                 classes = ['instruction', 'step', 'direction', 
