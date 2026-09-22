@@ -61,6 +61,9 @@ def extract_recipe_genai(image_paths: list[str],
                 # config=types.GenerateContentConfig(response_mime_type='application/json'),
                 config={'response_mime_type': 'application/json'},
             )
+            if not response.text:
+                raise ValueError(f"AI prompt returned empty ({genai_model})")
+            logger.debug("Gemini response: %s", response.text)
             break
         except errors.ServerError as e:
             if attempt == max_retries - 1:
@@ -69,7 +72,6 @@ def extract_recipe_genai(image_paths: list[str],
             time.sleep(delay)
             delay *= 2
     
-    logger.debug("Gemini response: %s", response.text)
     recipe_data = json.loads(response.text)
     if not isinstance(recipe_data, dict):
         raise TypeError(f"Unsupported data format: {response.text}")
