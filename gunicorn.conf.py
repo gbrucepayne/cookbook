@@ -46,17 +46,27 @@ logconfig_dict = {
         'handlers': ['console'],
     },
     'loggers': {
-        'gunicorn.error': {
+        'app': {
             'level': 'INFO',
             'handlers': ['console'],
             'propagate': False,
-            'qualname': 'gunicorn.error',
+        },
+        'alembic': {
+            'level': 'WARNING',
+            'handlers': ['console'],
+            'propagate': False,
+        },
+        'gunicorn.error': {
+            'level': 'WARNING',
+            'handlers': ['console'],
+            'propagate': False,
+            # 'qualname': 'gunicorn.error',
         },
         'gunicorn.access': {
-            'level': 'INFO',
+            'level': 'WARNING',
             'handlers': ['console'],
             'propagate': False,
-            'qualname': 'gunicorn.access',
+            # 'qualname': 'gunicorn.access',
         }
     }
 }
