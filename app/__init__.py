@@ -16,6 +16,10 @@ DEBUG_LOG_MASK = ['httpcore', 'PIL', 'httpx', 'google']
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+    app.config.update(
+        SESSION_COOKIE_SECURE=True,
+        REMOTE_ADDR_HEADER='X-Forwarded-For',
+    )
     
     root_logger = logging.getLogger()
     
