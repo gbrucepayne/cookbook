@@ -104,7 +104,7 @@ def extract_recipe_genai(image_paths: list[str],
             logger.error("Attempt %d (%s) failed: %s",
                          attempt + 1, genai_model, e)
             if attempt == max_retries - 1:
-                raise RuntimeError(f"AI retries {max_retries} exhausted")
+                raise RuntimeError(f"AI retries ({max_retries}) exhausted")
             time.sleep(delay)
             delay *= 2
     
