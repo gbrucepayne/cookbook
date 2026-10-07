@@ -60,7 +60,12 @@ async function executeMultiPageOCR() {
     });
 
     if (!response.ok) {
-      throw new Error('Parsing pipeline processing fault.');
+      let errStr = 'Parsing pipeline processing fault.';
+      try {
+        const errResponse = await response.json();
+        if (errResponse.error) errStr = errResponse.error;
+      } catch {}
+      throw new Error(errStr);
     }
     const newModalHtml = await response.text();
     // console.debug(`Received HTML: ${newModal}`);
