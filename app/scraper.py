@@ -53,7 +53,7 @@ def scrape_recipe_from_url(url) -> Recipe:
                                         break
                             if not RecipeCategory.has_value(value):
                                 value = RecipeCategory.MAIN
-                        if value:
+                        if value and value != 'None':
                             set_field_value(recipe, field, value)
                 except Exception as e:
                     logger.error(f"Failed to parse {field}: {e}")
