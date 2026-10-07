@@ -11,7 +11,10 @@ from ._generic import GenericScraper
 logger = logging.getLogger(__name__)
 
 
-def find_class_by_host(target_host: str) -> AbstractScraper:
+def get_scraper_subclass(url: str) -> AbstractScraper:
+    """Iterates custom recipe_scrapers to return a scraper subclass."""
+    parsed_url = urlparse(url)
+    target_host = parsed_url.netloc.lower().replace('www.', '')    
     ignore = ['__init__.py', '_utils.py', '_generic.py']
     folder = Path('./app/recipe_scrapers')
     for file_path in folder.glob('*.py'):
@@ -25,6 +28,9 @@ def find_class_by_host(target_host: str) -> AbstractScraper:
         spec.loader.exec_module(module)
         for _name, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ == module_name:
+                if hasattr(cls, 'valid_url') and inspect.ismethod(cls.valid_url):
+                    if cls.valid_url(url):
+                        return cls
                 if hasattr(cls, 'host') and inspect.ismethod(cls.host):
                     try:
                         if cls.host() == target_host:
@@ -49,9 +55,7 @@ def x_scrape_html(html: str|None,
         return scraped
     except Exception as e:
         logger.debug(str(e).replace('\n', ' '))
-    parsed_url = urlparse(org_url)
-    domain_name = parsed_url.netloc.lower().replace('www.', '')
-    scraper_cls = find_class_by_host(domain_name)
+    scraper_cls = get_scraper_subclass(org_url)
     if scraper_cls and issubclass(scraper_cls, AbstractScraper):
         return scraper_cls(html, org_url, best_image=best_image)
     raise NotImplementedError("Unable to derive scraper")
