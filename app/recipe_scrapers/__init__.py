@@ -40,8 +40,8 @@ def get_scraper_subclass(url: str) -> AbstractScraper:
                     except Exception as e:
                         logger.error(e)
                         continue
-        logger.info("Parsed from %s using raw HTML", target_host)
-        return GenericScraper
+    logger.info("Parsed from %s using raw HTML", target_host)
+    return GenericScraper
 
 
 def x_scrape_html(html: str|None,
