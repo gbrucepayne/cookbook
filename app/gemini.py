@@ -70,11 +70,15 @@ def extract_recipe_genai(image_paths: list[str],
     supported_models = []
     for model in client.models.list():
         if 'generateContent' in model.supported_actions:
-            supported_models.append(model.name.replace('models/', ''))
+            name = model.name.replace('models/', '')
+            if name.endswith(('-flash', '-flash-latest')):
+                supported_models.append(name)
     sorted_models = sorted(supported_models,
                            key=_get_model_version,
                            reverse=True)
     genai_models = sorted_models[:MODEL_ATTEMPT_LIMIT]
+    if len(genai_models) == 0:
+        raise ValueError('Unable to derive supported Gemini models')
     for attempt in range(max_retries):
         try:
             genai_model = genai_models[attempt % len(genai_models)]
