@@ -198,14 +198,14 @@ class GenericScraper(AbstractScraper):
                 break
         # Fallback to soup
         if not instructions:
-            headings = ['Instructions', 'Method']
+            headings = ['Instructions', 'Method', 'Directions']
             for heading in headings:
                 instructions = get_list_following(heading, self.soup)
                 if instructions: break
             if not instructions:
                 classes = ['instruction', 'step', 'direction', 
                         'wprm-recipe-instruction', 'preparation']
-                headers = ('instructions', 'method',)
+                headers = ('instructions', 'method', 'directions',)
                 step_number_pattern = r'^\s*\d+(?!\s*[\/\.])[\s\.\-\–\—:]*'
                 for el in self.soup.select(css_class_filter(classes)):
                     candidate = el.text.strip()
