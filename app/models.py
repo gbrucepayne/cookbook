@@ -187,6 +187,8 @@ def set_field_value(recipe: Recipe, field: str, value: Any) -> None:
             # normalize for storage
             value = '\n'.join([normalize_unicode_fractions(ingredient) 
                                for ingredient in value.split('\n')])
+        elif field == 'title':
+            value = to_recipe_title_case(value)
     elif field_type(field) is int:
         if value and not isinstance(value, int):
             match = re.match(r'^\s*(\d+)', value.strip())
@@ -211,4 +213,36 @@ def update_recipe_times(recipe) -> None:
     if not recipe.total_time:
         recipe.total_time = sum([recipe.prep_time or 0,
                                  recipe.cook_time or 0]) or None
+
+
+def to_recipe_title_case(text: str) -> str:
+    if not isinstance(text, str) or not text:
+        return ""
     
+    # Define lowercase exceptions (articles, conjunctions, prepositions)
+    exceptions = {
+        "a", "an", "the", 
+        "and", "but", "or", "nor", "for", "yet", "so",
+        "at", "by", "in", "of", "on", "to", "with", "from", "into"
+    }
+
+    # Tokenize into words while safely retaining leading/trailing whitespace
+    words = text.split()
+    if not words:
+        return text
+
+    processed_words = []
+    for i, word in enumerate(words):
+        # Strip punctuation to accurately check against the exceptions list
+        clean_word = re.sub(r'^[^\w]+|[^\w]+$', '', word).lower()
+
+        # Rule: Always capitalize the first and last words, 
+        # otherwise check if the word is an exception.
+        if i == 0 or i == len(words) - 1 or clean_word not in exceptions:
+            # Capitalize only the first character to prevent messing up 
+            # contractions like "They're" or "Recipe's"
+            processed_words.append(word[0].upper() + word[1:])
+        else:
+            processed_words.append(word.lower())
+
+    return " ".join(processed_words)
