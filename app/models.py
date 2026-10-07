@@ -215,8 +215,12 @@ def update_recipe_times(recipe) -> None:
                                  recipe.cook_time or 0]) or None
 
 
+def collapse_quotes(text: str) -> str:
+    return re.sub(r'"+', '"', text)
+
+
 def to_recipe_title_case(text: str) -> str:
-    if not isinstance(text, str) or not text:
+    if not isinstance(text, str) or not text.strip():
         return ""
     
     # Define lowercase exceptions (articles, conjunctions, prepositions)
@@ -227,21 +231,35 @@ def to_recipe_title_case(text: str) -> str:
     }
 
     # Tokenize into words while safely retaining leading/trailing whitespace
-    words = text.split()
+    words = [collapse_quotes(w.strip().lower()) 
+             for w in text.split(' ') if w.strip()]
     if not words:
         return text
 
     processed_words = []
     for i, word in enumerate(words):
+        if '-' in word:
+            dashwords = []
+            parts = word.split('-')
+            for j, part in enumerate(parts):
+                if j == 0 or j == len(parts) - 1 or part not in exceptions:
+                    dashwords.append(part[0].upper() + part[1:])
+                else:
+                    dashwords.append(part)
+            word = '-'.join(dashwords)
         # Strip punctuation to accurately check against the exceptions list
-        clean_word = re.sub(r'^[^\w]+|[^\w]+$', '', word).lower()
-
+        clean_word = re.sub(r'^[^\w]+|[^\w]+$', '', word)
         # Rule: Always capitalize the first and last words, 
         # otherwise check if the word is an exception.
-        if i == 0 or i == len(words) - 1 or clean_word not in exceptions:
+        if (i == 0 or i == len(words) - 1 or 
+            word.startswith('"') or word.endswith('"') or
+            clean_word not in exceptions):
             # Capitalize only the first character to prevent messing up 
             # contractions like "They're" or "Recipe's"
-            processed_words.append(word[0].upper() + word[1:])
+            if word.startswith('"'):
+                processed_words.append('"' + word[1].upper() + word[2:])
+            else:
+                processed_words.append(word[0].upper() + word[1:])
         else:
             processed_words.append(word.lower())
 

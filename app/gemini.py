@@ -12,7 +12,7 @@ from google.genai import errors, types
 from PIL import Image
 
 from app.image import optimize_and_save_image_stream
-from app.models import Recipe, required_fields, valid_fields
+from app.models import Recipe, required_fields, set_field_value, valid_fields
 
 logger = logging.getLogger(__name__)
 
@@ -112,11 +112,13 @@ def extract_recipe_genai(image_paths: list[str],
     if not isinstance(recipe_data, dict):
         raise TypeError(f"Unsupported data format: {response.text}")
     
-    clean_data = {k: v for k, v in recipe_data.items() if k in valid_fields()}
-    recipe = Recipe(**clean_data)
-    for attr in required_fields():
-        if not getattr(recipe, attr):
-            raise ValueError(f"Invalid recipe missing {attr}")
+    recipe = Recipe()
+    for field in valid_fields():
+        if field not in recipe_data:
+            if field in required_fields():
+                raise ValueError(f"Invalid recipe - missing {field}")
+            continue
+        set_field_value(recipe, field, recipe_data.get(field))
 
     # Extract the returned dish/hero image bounding box coordinates
     image_box = recipe_data.get("dish_image_box")
