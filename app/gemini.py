@@ -8,7 +8,7 @@ import re
 import time
 
 from google import genai
-from google.genai import errors
+from google.genai import errors, types
 from PIL import Image
 
 from app.image import optimize_and_save_image_stream
@@ -17,6 +17,7 @@ from app.models import Recipe, required_fields, valid_fields
 logger = logging.getLogger(__name__)
 
 MODEL_ATTEMPT_LIMIT = 3
+ATTEMPT_TIMEOUT_SEC = 90
 
 
 def _get_model_version(model_name):
@@ -36,7 +37,10 @@ def extract_recipe_genai(image_paths: list[str],
                          initial_delay: int = 5,
                          ) -> Recipe:
     """Use GenAI to attempt to extract recipe data from images."""
-    client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
+    client = genai.Client(
+        api_key=os.getenv('GEMINI_API_KEY'),
+        http_options=types.HttpOptions(timeout=ATTEMPT_TIMEOUT_SEC*1000),
+    )
     uploaded_files = []
     for image_path in image_paths:
         if not os.path.exists(image_path):
@@ -86,9 +90,7 @@ def extract_recipe_genai(image_paths: list[str],
             response = client.models.generate_content(
                 model=genai_model,
                 contents=[uploaded_files, prompt],
-                # config=types.GenerateContentConfig(response_mime_type='application/json'),
                 config={'response_mime_type': 'application/json'},
-                options={'timeout': 90.0},
             )
             if not response.text:
                 logger.error("Model %s returned empty. Finish: %s. Safety: %s",
