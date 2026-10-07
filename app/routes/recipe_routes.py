@@ -214,7 +214,9 @@ def import_url():
                     "error"
                 )
             else:
-                
+                if not recipe.ingredients or not recipe.instructions:
+                    raise ValueError('Failed to parse instructions'
+                                     ' or ingredients')
                 # Download and save the image locally
                 if recipe.image_url:
                     recipe.image_url = download_and_cache_image(
@@ -223,15 +225,17 @@ def import_url():
                         title=recipe.title,
                     )
                 
-                db.session.add(recipe)
-                db.session.commit()
                 logger.info("Imported %s from %s",
                             recipe.title, domain_name)
+                db.session.add(recipe)
+                db.session.commit()
                 flash(
                     f"{ICON['SUCCESS']} Successfully imported"
                     f" <b>{recipe.title}</b> from <i>{domain_name}</i>!",
                     "success"
                 )
+                return redirect(url_for('recipes.view_recipe',
+                                        recipe_id=recipe.id))
         except Exception as e:
             flash(
                 f"{ICON['FAIL']} Failed to parse recipe"
