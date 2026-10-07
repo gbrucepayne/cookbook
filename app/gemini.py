@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import os
+import re
 import time
 
 from google import genai
@@ -14,6 +15,19 @@ from app.image import optimize_and_save_image_stream
 from app.models import Recipe, required_fields, valid_fields
 
 logger = logging.getLogger(__name__)
+
+MODEL_ATTEMPT_LIMIT = 3
+
+
+def _get_model_version(model_name):
+    """Extract the Gemini model version (for sorting)."""
+    match = re.search(r'gemini-(\d+)\.(\d+)', model_name)
+    if match:
+        return (int(match.group(1)), int(match.group(2)))
+    match_single = re.search(r'gemini-(\d+)', model_name)
+    if match_single:
+        return (int(match_single.group(1)), 0)
+    return (0, 0)
 
 
 def extract_recipe_genai(image_paths: list[str],
@@ -53,11 +67,14 @@ def extract_recipe_genai(image_paths: list[str],
     )
     
     delay = initial_delay
-    genai_models = [
-        'gemini-3.5-flash',
-        'gemini-3.6-flash',
-        'gemini-flash-latest',
-    ]
+    supported_models = []
+    for model in client.models.list():
+        if 'generateContent' in model.supported_actions:
+            supported_models.append(model.name.replace('models/', ''))
+    sorted_models = sorted(supported_models,
+                           key=_get_model_version,
+                           reverse=True)
+    genai_models = sorted_models[:MODEL_ATTEMPT_LIMIT]
     for attempt in range(max_retries):
         try:
             genai_model = genai_models[attempt % len(genai_models)]
