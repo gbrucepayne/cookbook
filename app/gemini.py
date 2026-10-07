@@ -88,6 +88,7 @@ def extract_recipe_genai(image_paths: list[str],
                 contents=[uploaded_files, prompt],
                 # config=types.GenerateContentConfig(response_mime_type='application/json'),
                 config={'response_mime_type': 'application/json'},
+                options={'timeout': 90.0},
             )
             if not response.text:
                 logger.error("Model %s returned empty. Finish: %s. Safety: %s",

@@ -13,7 +13,7 @@ port = os.getenv('PORT', '5001')
 bind = f"0.0.0.0:{port}"
 forwarded_allow_ips = "127.0.0.1"
 workers = 3
-timeout = 60
+timeout = 95
 
 # Formatter for internal logs
 class JsonFormatter(logging.Formatter):
