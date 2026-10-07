@@ -16,7 +16,7 @@ from app.models import Recipe, required_fields, valid_fields
 
 logger = logging.getLogger(__name__)
 
-MODEL_ATTEMPT_LIMIT = 3
+MODEL_ATTEMPT_LIMIT = 4
 ATTEMPT_TIMEOUT_SEC = 90
 
 
@@ -33,7 +33,7 @@ def _get_model_version(model_name):
 
 def extract_recipe_genai(image_paths: list[str],
                          image_folder: str,
-                         max_retries: int = 3,
+                         max_retries: int = MODEL_ATTEMPT_LIMIT,
                          initial_delay: int = 5,
                          ) -> Recipe:
     """Use GenAI to attempt to extract recipe data from images."""
