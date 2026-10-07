@@ -71,7 +71,7 @@ def scrape_recipe_from_url(url) -> Recipe:
         
     except Exception as e:
         logger.error("Scraper error encountered: %s", e)
-        return None
+        raise
 
 
 def fetch_recipe_html_safe(url: str, max_retries: int = 3) -> str:
