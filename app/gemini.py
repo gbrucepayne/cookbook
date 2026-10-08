@@ -31,6 +31,36 @@ def _get_model_version(model_name):
     return (0, 0)
 
 
+def _get_model_list(client: genai.Client) -> list[str]:
+    """Get a list of models to attempt in sequence."""
+    supported_models: list[str] = []
+    for model in client.models.list():
+        if 'generateContent' in model.supported_actions:
+            name = model.name.replace('models/', '')
+            if '-omni-' in name:
+                continue
+            if name.endswith(('-flash', 'flash-lite', '-flash-latest')):
+                supported_models.append(name)
+    genai_models: list[str] = sorted(supported_models,
+                                      key=_get_model_version,
+                                      reverse=True)
+    # replace the highest version with latest
+    if 'gemini-flash-latest' in genai_models:
+        old_idx = genai_models.index('gemini-flash-latest')
+        genai_models[0] = genai_models.pop(old_idx)
+    # walk back through models until latest lite
+    for i, model in enumerate(genai_models):
+        if model.endswith('-lite'):
+            genai_models = genai_models[:i + 1]
+            break
+    while len(genai_models) > MODEL_ATTEMPT_LIMIT:
+        if len(genai_models) > 1:
+            del genai_models[-2]
+    # Try oldest first to avoid 503/busy errors
+    genai_models.reverse()
+    return genai_models   
+
+
 def extract_recipe_genai(image_paths: list[str],
                          image_folder: str,
                          max_retries: int = MODEL_ATTEMPT_LIMIT,
@@ -71,22 +101,13 @@ def extract_recipe_genai(image_paths: list[str],
     )
     
     delay = initial_delay
-    supported_models = []
-    for model in client.models.list():
-        if 'generateContent' in model.supported_actions:
-            name = model.name.replace('models/', '')
-            if name.endswith(('-flash', '-flash-latest')):
-                supported_models.append(name)
-    sorted_models = sorted(supported_models,
-                           key=_get_model_version,
-                           reverse=True)
-    genai_models = sorted_models[:MODEL_ATTEMPT_LIMIT]
+    genai_models = _get_model_list(client)
     if len(genai_models) == 0:
         raise ValueError('Unable to derive supported Gemini models')
     for attempt in range(max_retries):
         try:
             genai_model = genai_models[attempt % len(genai_models)]
-            logger.info("Querying GenAI model %s", genai_model)
+            logger.info("Querying %s with recipe image(s)", genai_model)
             response = client.models.generate_content(
                 model=genai_model,
                 contents=[uploaded_files, prompt],
@@ -97,7 +118,8 @@ def extract_recipe_genai(image_paths: list[str],
                              genai_model,
                              response.candidates[0].finish_reason,
                              response.candidates[0].safety_ratings)
-                raise RuntimeError(f"AI prompt returned empty ({genai_model})")
+                reason = response.candidates[0].finish_reason.value
+                raise RuntimeError(f"{genai_model} returned empty ({reason})")
             logger.debug("Gemini response: %s", response.text)
             break
         except errors.ServerError as e:
