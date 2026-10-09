@@ -1,9 +1,9 @@
 """Recipe parser for Canadian Living.
 """
+import re
+
 from recipe_scrapers import AbstractScraper
 from recipe_scrapers._utils import normalize_string
-
-from app.recipe_scrapers._utils import recipe_time
 
 URL_BASE_PATH = 'more.ctv.ca/shows/the-good-stuff-with-mary-berg/recipes'
 
@@ -84,10 +84,10 @@ class MaryBergGoodStuff(AbstractScraper):
         if not heading:
             raise ValueError(f"Unable find {heading_text} section")
         for sibling in heading.next_siblings:
-            if sibling.name is None:
-                continue
-            if sibling.name in ['p'] and sibling.text.strip():
-                subheading = sibling.text.strip().replace('\n', ' ')
+            if sibling.name in ['p'] and sibling.get_text(strip=True):
+                subheading = sibling.get_text(strip=True).replace('\n', ' ')
+                if subheading == "Notes:":
+                    break
                 instructions.append(f"# {subheading}")
             elif sibling.name in ['ol', 'ul']:                
                 for li in sibling.find_all('li'):
@@ -98,29 +98,96 @@ class MaryBergGoodStuff(AbstractScraper):
                         instructions.append(text)
         return '\n'.join(instructions)
     
+    def _convert_to_minutes(self, text: str) -> int:
+        pattern = r'(\d+)\s*(hour|min|hr)[a-z]*'
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        total_minutes = 0
+        for value, unit in matches:
+            value = float(value)
+            if any(h in unit.lower() for h in ['hour', 'hr']):
+                total_minutes += value * 60
+            else:
+                total_minutes += value
+        return int(total_minutes)
+        
     def prep_time(self):
-        target_span = self.soup.find('span', string="Prep time")
-        if target_span:
-            next_span = target_span.find_next('span')
-            if next_span:
-                return recipe_time(next_span.get_text())
-        raise ValueError("Unable to derive prep time")
+        tag = "Prep Time"
+        target_th = self.soup.find(
+            'th',
+            string=lambda t: t and t.strip() == tag
+        )
+        if target_th:
+            header_row = target_th.find_parent('tr')
+            headers = [th.get_text(strip=True) 
+                       for th in header_row.find_all('th')]
+            data_row = header_row.find_next('tr')
+            if data_row:
+                data_values = [td.get_text(strip=True) 
+                               for td in data_row.find_all('td')]
+                prep_time_str = data_values[headers.index(tag)]
+                prep_time = self._convert_to_minutes(prep_time_str)
+                if prep_time:
+                    return prep_time
+        raise ValueError("Unable to derive Prep Time")
     
-    def total_time(self):
-        target_span = self.soup.find('span', string="Total time")
-        if target_span:
-            next_span = target_span.find_next('span')
-            if next_span:
-                return recipe_time(next_span.get_text())
-        raise ValueError("Unable to derive total time")
+    def cook_time(self):
+        tag = "Cook Time"
+        target_th = self.soup.find(
+            'th',
+            string=lambda t: t and t.strip() == tag
+        )
+        if target_th:
+            header_row = target_th.find_parent('tr')
+            headers = [th.get_text(strip=True) 
+                       for th in header_row.find_all('th')]
+            data_row = header_row.find_next('tr')
+            if data_row:
+                data_values = [td.get_text(strip=True) 
+                               for td in data_row.find_all('td')]
+                cook_time_str = data_values[headers.index(tag)]
+                cook_time = self._convert_to_minutes(cook_time_str)
+                if cook_time:
+                    return cook_time
+        raise ValueError("Unable to derive Cook Time")
     
     def yields(self):
-        target_table = self.soup.find('th', string="Portions")
-        if target_table:
-            next_row = target_table.find_next('td')
-            if next_row:
-                portion_size = next_row.get_text().split(' ')[1]
-                if '-' in portion_size:
-                    portion_size = portion_size.split('-')[0].strip()
-                return int(portion_size)
-        raise ValueError("Unable to derive yields")
+        tag = "Portions"
+        target_th = self.soup.find(
+            'th',
+            string=lambda t: t and t.strip() == tag
+        )
+        if target_th:
+            header_row = target_th.find_parent('tr')
+            headers = [th.get_text(strip=True) 
+                       for th in header_row.find_all('th')]
+            data_row = header_row.find_next('tr')
+            if data_row:
+                data_values = [td.get_text(strip=True) 
+                               for td in data_row.find_all('td')]
+                idx = headers.index(tag)
+                portions = data_values[idx]
+                match = re.search(r'\d+(?:-\d+)?', portions)
+                if match:
+                    portion_size = match.group(0).split('-')[0]
+                    return int(portion_size)
+        raise ValueError("Unable to derive yields (Portions)")
+    
+    def description(self):
+        target = self.soup.find('h2', {'class': 'b-subheadline'})
+        if target:
+            return target.get_text(strip=True)
+        raise ValueError("Unable to derive description (subheadline)")
+    
+    def notes(self):
+        tag = "Notes:"
+        target = self.soup.find('b', string=lambda t: t and t.strip() == tag)
+        if target:
+            notes: list[str] = []
+            parent_p = target.find_parent('p')
+            if parent_p:
+                for sibling in parent_p.next_siblings:
+                    if sibling.name in ['p'] and sibling.get_text(strip=True):
+                        notes.append(sibling.get_text(strip=True))
+            if notes:
+                return notes
+        raise ValueError("Unable to derive Notes")
