@@ -5,6 +5,10 @@ import re
 from bs4 import BeautifulSoup
 
 
+def _normalize(text: str) -> str:
+    return text.strip().lower()
+
+    
 def css_class_filter(class_list: list[str], descendant_mode: bool = True) -> str:
     """Convert a list of class strings into case-insensitive CSS selector."""
     # Loop through list, strip whitespaces, and format the CSS string fragment
@@ -20,17 +24,24 @@ def css_class_filter(class_list: list[str], descendant_mode: bool = True) -> str
 def get_list_following(heading_text: str, soup: BeautifulSoup) -> list[str]:
     """Retrieve a list of strings following a particular heading/div text."""
     list_following: list[str] = []
-    tags = ['h1', 'h2', 'h3', 'h4', 'div']
+    tags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div']
     heading = soup.find(lambda tag: tag.name in tags and 
-                        heading_text.strip().lower() == tag.text.strip().lower())
+                        _normalize(heading_text) == _normalize(tag.get_text()))
     if heading:
         target_list = heading.find_next(['ul', 'ol'])
         if target_list:
-            list_following = []
             for li in target_list.find_all('li'):
-                text = li.get_text(separator=" ", strip=True).strip()
+                text = li.get_text(separator=' ', strip=True)
                 if text:
                     list_following.append(text)
+        if not list_following:
+            target_p = heading.find_next(['p'])
+            if target_p:
+                for br in target_p.find_all('br'):
+                    br.replace_with('\n')
+                text = target_p.get_text(separator=' ')
+                list_following = [line.strip() for line in text.split('\n')
+                                  if line.strip()]
     return list_following
 
 
