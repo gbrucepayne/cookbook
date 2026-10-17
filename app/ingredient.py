@@ -47,7 +47,7 @@ UNIT_CONTAINERS = {
 }
 
 UNIT_ABBREVIATION_MAP = {
-    # 'c': 'cup',
+    'c': 'cup',
     'tsp': 'teaspoon',
     'tsps': 'teaspoons',
     'tbsp': 'tablespoon',
@@ -203,6 +203,11 @@ def extract_unit_and_food(quantity_removed: str) -> tuple[str, str]:
     if not cleaned:
         return "", ""
 
+    for abbr in ['c ', 'c. ']:
+        if cleaned.startswith(abbr):
+            cleaned = cleaned.replace(abbr, 'cup ', 1)
+            break
+        
     container = None
     for word in cleaned.split(' '):
         if word in UNIT_CONTAINERS:

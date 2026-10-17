@@ -48,7 +48,8 @@ def test_normalize_unicode_fraction(input, expected):
     [
         ("pounds pork loin or chops", "pound", "pork loin or chops"),
         ("tsp. kosher salt", "teaspoon", "kosher salt"),
-        ("15-ounce can black beans", "can", "(15-ounce) black beans"),
+        ("15-ounce can black beans", "can", "(15-oz) black beans"),
+        ("c. vegetable oil", "cup", "vegetable oil"),
     ]
 )
 def test_extract_unit_and_food(input, expected_unit, expected_food):
@@ -74,6 +75,8 @@ def test_extract_unit_and_food(input, expected_unit, expected_food):
         ("1 tsp. kosher salt", None, True, "1 tsp kosher salt"),
         ("1 15-ounce can black beans, drained and rinsed", None, True, "1 can (15-oz) black beans, drained and rinsed"),
         ("3 15-ounce cans green enchilada sauce", 1/2, True, "1½ cans (15-oz) green enchilada sauce"),
+        ("1/4 cup vegetable oil", None, False, "¼ cup vegetable oil"),
+        ("1/4 c. vegetable oil", None, False, "¼ cup vegetable oil"),
     ]
 )
 def test_scale_ingredient_line(input, scale, unit_abbr, expected):
