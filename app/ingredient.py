@@ -23,10 +23,39 @@ UNICODE_FRACTIONS = {
 }
 
 UNIT_PLURAL_MAP = {
-    'cups': 'cup', 'teaspoons': 'teaspoon', 'tsps': 'tsp',
-    'tablespoons': 'tablespoon', 'tbsps': 'tbsp', 'ounces': 'ounce',
-    'ozs': 'oz', 'pounds': 'pound', 'lbs': 'lb', 'cloves': 'clove',
-    'pinches': 'pinch', 'cans': 'can', 'glasses': 'glass'
+    'cups': 'cup',
+    'teaspoons': 'teaspoon',
+    'tsps': 'tsp',
+    'tablespoons': 'tablespoon',
+    'tbsps': 'tbsp',
+    'ounces': 'ounce',
+    'ozs': 'oz',
+    'pounds': 'pound',
+    'lbs': 'lb',
+    'cloves': 'clove',
+    'pinches': 'pinch',
+    'cans': 'can',
+    'glasses': 'glass',
+    'packages': 'package',
+    'containers': 'container',
+}
+
+UNIT_CONTAINERS = {
+    'can', 'cans',
+    'package', 'packages',
+    'container', 'containers',
+}
+
+UNIT_ABBREVIATION_MAP = {
+    # 'c': 'cup',
+    'tsp': 'teaspoon',
+    'tsps': 'teaspoons',
+    'tbsp': 'tablespoon',
+    'tbsps': 'tablespoons',
+    'oz': 'ounce',
+    'ozs': 'ounces',
+    'lb': 'pound',
+    'lbs': 'pounds',
 }
 
 # Bidirectional conversions mapping directly to a multiplier ratio 
@@ -165,15 +194,21 @@ def format_fraction(frac: Fraction, sep: str = '') -> str:
     return str(whole)
 
 
-def extract_unit_and_food(text_line: str) -> tuple[str, str]:
+def extract_unit_and_food(quantity_removed: str) -> tuple[str, str]:
     """Extract unit keywords and return them directly after quantities. 
     
     Retains punctuation (like commas, dashes, or parentheses) intact. 
     """
-    cleaned = text_line.strip()
+    cleaned = quantity_removed.strip()
     if not cleaned:
         return "", ""
 
+    container = None
+    for word in cleaned.split(' '):
+        if word in UNIT_CONTAINERS:
+            container = word
+            break
+    
     all_units = list(UNIT_PLURAL_MAP.keys()) + list(UNIT_PLURAL_MAP.values())
     all_units.sort(key=len, reverse=True)
     
@@ -182,9 +217,24 @@ def extract_unit_and_food(text_line: str) -> tuple[str, str]:
     match = unit_pattern.search(cleaned)
     if match:
         unit_found = match.group(1).lower()
+        if unit_found in UNIT_ABBREVIATION_MAP:
+            unit_found = UNIT_ABBREVIATION_MAP[unit_found]
+        if unit_found in UNIT_PLURAL_MAP:
+            unit_found = UNIT_PLURAL_MAP[unit_found]
         
         # Remove the unit word from the original string
         food_item = unit_pattern.sub('', cleaned, count=1)
+        # Remove any abbreviation indicator
+        if food_item.startswith('. '):
+            food_item = food_item.replace('. ', '', 1)
+        
+        if container:
+            abbreviations = {v: k for k, v in UNIT_ABBREVIATION_MAP.items()}
+            unit_found = abbreviations.get(unit_found, unit_found)
+            volume, item = food_item.split(container, 1)
+            volume = f"({volume.replace('-', '').strip()}-{unit_found})"
+            food_item = f"{volume.strip()} {item.strip()}"
+            unit_found = container
         
         # Clean up multi-space gaps first
         food_item = re.sub(r'\s+', ' ', food_item).strip()
@@ -225,7 +275,8 @@ def apply_unit_conversions(qty: float, unit: str) -> tuple[float, str]:
 
 def scale_ingredient_line(ingredient_line: str,
                           factor: float = 1.0,
-                          sep: str = '') -> str:
+                          fraction_sep: str = '',
+                          abbreviate_unit: bool = False) -> str:
     """Parse, standardize and scale an ingredient line.
     1. Uniformly repositions Unit directly after Quantities.
     2. Supports Min-Max Hyphenated Range Arrays dynamically.
@@ -238,7 +289,9 @@ def scale_ingredient_line(ingredient_line: str,
     if not match:
         return clean_line
 
-    # Extract dynamic matched regex block strings
+    # Extract dynamic matched regex block strings:
+    # mixed fractions: w: whole part, f: fraction part
+    # standalone fractions: sf, standalone integers: i
     w1, f1, sf1, i1, w2, f2, sf2, i2, rest_text = match.groups()
     
     if not any([w1, f1, sf1, i1]):
@@ -278,14 +331,17 @@ def scale_ingredient_line(ingredient_line: str,
 
     # Format numeric portions into crisp fractions
     frac1 = float_to_nearest_fraction(val1)
-    qty_str = format_fraction(frac1, sep=sep)
+    qty_str = format_fraction(frac1, sep=fraction_sep)
     
     if val2:
         frac2 = float_to_nearest_fraction(val2)
-        qty_str = f"{qty_str}-{format_fraction(frac2, sep=sep)}"
+        qty_str = f"{qty_str}-{format_fraction(frac2, sep=fraction_sep)}"
 
     # Re-apply appropriate structural pluralization layout grammar suffixes
     if final_unit:
+        if abbreviate_unit and final_unit not in UNIT_ABBREVIATION_MAP:
+            abbreviations = {v: k for k, v in UNIT_ABBREVIATION_MAP.items()}
+            final_unit = abbreviations.get(final_unit, final_unit)
         is_plural = val1 > 1 or (val2 and val2 > 1)
         if is_plural:
             # Reverse-lookup the exact mapping plural spelling key
