@@ -1,9 +1,13 @@
 """Ingredient processing helpers.
 """
 
+import logging
 import re
 import unicodedata
+from dataclasses import dataclass
 from fractions import Fraction
+
+logger = logging.getLogger(__name__)
 
 # Gracefully capture: [Qty1](-[Qty2])? [Unit/Food Name String]
 # Evaluates ranges like "2-3", "1 1/2-2", or vulgar standalone numbers
@@ -34,16 +38,87 @@ UNIT_PLURAL_MAP = {
     'lbs': 'lb',
     'cloves': 'clove',
     'pinches': 'pinch',
-    'cans': 'can',
+    # 'cans': 'can',
+    # 'glasses': 'glass',
+    # 'packages': 'package',
+    # 'containers': 'container',
+}
+
+UNIT_MAP = {
+    'c': 'cup',
+    'cs': 'cup',
+    'cup': 'cup',
+    'cups': 'cup',
+    'tbsp': 'tablespoon',
+    'tablespoon': 'tablespoon',
+    'tablespoons': 'tablespoon',
+    'tsp': 'teaspoon',
+    'tsps': 'teaspoon',
+    'teaspoon': 'teaspoon',
+    'teaspoons': 'teaspoon',
+    'oz': 'ounce',
+    'ozs': 'ounce',
+    'ounce': 'ounce',
+    'ounces': 'ounce',
+    'lb': 'pound',
+    'lbs': 'pound',
+    'pound': 'pound',
+    'pounds': 'pound',
+    'ml': 'millilitre',
+    'milliliter': 'millilitre',
+    'milliliters': 'millilitre',
+    'millilitre': 'millilitre',
+    'millilitres': 'millilitre',
+    'l': 'litre',
+    'liter': 'litre',
+    'liters': 'litre',
+    'litre': 'litre',
+    'litres': 'litre',
+    'g': 'gram',
+    'gram': 'gram',
+    'grams': 'gram',
+    'kg': 'kilogram',
+    'kilogram': 'kilogram',
+    'kilograms': 'kilogram',
+    'clove': 'clove',
+    'cloves': 'clove',
+    'pinch': 'pinch',
+    'pinches': 'pinch',
+    'glass': 'glass',
     'glasses': 'glass',
-    'packages': 'package',
-    'containers': 'container',
+}
+
+UNIT_PLURALS = {
+    'pinch': 'pinches',
+    'ml': 'ml',
+    'l': 'l',
+    'g': 'g',
+    'kg': 'kg',
 }
 
 UNIT_CONTAINERS = {
     'can', 'cans',
     'package', 'packages',
+    'glass', 'glasses',
     'container', 'containers',
+}
+
+CONTAINER_MAP = {
+    'can': 'can',
+    'cans': 'can',
+    'package': 'package',
+    'packages': 'package',
+    'glass': 'glass',
+    'glasses': 'glass',
+}
+
+ABBREVIATIONS = {
+    'teaspoon': 'tsp',
+    'tablespoon': 'tbsp',
+    'ounce': 'oz',
+    'pound': 'lb',
+    'millilitre': 'ml',
+    'litre': 'l',
 }
 
 UNIT_ABBREVIATION_MAP = {
@@ -62,15 +137,29 @@ UNIT_ABBREVIATION_MAP = {
 # and target singular word
 # Trigger up at > 0.375 (so 1/4 tsp remains tsp)
 UNIT_CONVERSIONS = {
-    'cup': {'down': (16, 'tablespoon'), 'max': 8},
+    'cup': {
+        'down': (16, 'tablespoon'),
+        'max': 8,
+    },
     'tablespoon': {
         'up': (1/16, 'cup'),
         'down': (3, 'teaspoon'),
         'max': 16,
         'min': 0.25,
     },
-    'teaspoon': {'up': (1/3, 'tablespoon'), 'min': 0.375}
+    'teaspoon': {
+        'up': (1/3, 'tablespoon'),
+        'min': 0.375,
+    }
 }
+
+
+# @dataclass
+# class IngredientContainer:
+#     name: str
+#     quantity: float | None = None
+#     unit: str | None = None
+#     food_item: str | None = None
 
 
 def reorder_cooking_terms(text: str) -> str:
@@ -113,6 +202,19 @@ def convert_floats_to_fractions(text: str) -> str:
         except ValueError:
             continue
     return ' '.join(words)
+
+
+def convert_to_float(text: str) -> float:
+    """Convert a numeric string to floating point."""
+    cleaned = text.strip().replace('-', ' ')
+    parts = cleaned.split()
+    if len(parts) == 2:
+        whole_part = float(Fraction(parts[0]))
+        frac_part = float(Fraction(parts[1]))
+        return whole_part + frac_part
+    elif len(parts) == 1:
+        return float(Fraction(parts[0]))
+    raise ValueError(f"Invalid numeric string format: '{text}")
 
 
 def normalize_unicode_fractions(text: str) -> str:
@@ -194,88 +296,178 @@ def format_fraction(frac: Fraction, sep: str = '') -> str:
     return str(whole)
 
 
-def extract_unit_and_food(quantity_removed: str) -> tuple[str, str]:
-    """Extract unit keywords and return them directly after quantities. 
-    
-    Retains punctuation (like commas, dashes, or parentheses) intact. 
-    """
-    cleaned = quantity_removed.strip()
-    if not cleaned:
-        return "", ""
+@dataclass
+class UnitConversion:
+    qty: float
+    unit: str
+    ratio: float = 1.0
 
-    for abbr in ['c ', 'c. ']:
-        if cleaned.startswith(abbr):
-            cleaned = cleaned.replace(abbr, 'cup ', 1)
-            break
-        
-    container = None
-    for word in cleaned.split(' '):
-        if word in UNIT_CONTAINERS:
-            container = word
-            break
+
+def apply_unit_conversions(qty: float, unit: str) -> UnitConversion:
+    """Convert small scale quantities down, large numbers up natively.
+    """
+    base_unit = UNIT_PLURAL_MAP.get(unit.lower(), unit.lower())
+    config = UNIT_CONVERSIONS.get(base_unit, {})
+    conversion = UnitConversion(qty, base_unit)
     
-    all_units = list(UNIT_PLURAL_MAP.keys()) + list(UNIT_PLURAL_MAP.values())
-    all_units.sort(key=len, reverse=True)
+    if config:
+        if 'down' in config and qty <= config.get('min', 0.125):
+            multiplier, new_unit = config['down']
+        elif 'up' in config and qty > config.get('max', 8):
+            multiplier, new_unit = config['up']
+        else:
+            multiplier, new_unit = 1, base_unit
+        if new_unit != base_unit:
+            conversion.qty *= multiplier
+            conversion.unit = new_unit
+            conversion.ratio = multiplier
+    return conversion
+
+
+@dataclass
+class Measurement:
+    qty: float = 1.0
+    unit: str | None = None
+    item: str | None = None
+
+
+def extract_measurement(text: str, unit_abbr: bool = False) -> Measurement|None:
+    """Extract a quantity, unit and item from an ingredient line.
     
-    unit_pattern = re.compile(rf'\b({"|".join(all_units)})\b', re.IGNORECASE)
+    * Allows abbreviated units with optional period e.g. `tsp.`
+    * Allows single-character abbreviations e.g. `g`
+    """
+    cleaned = text.strip()
+    single_chars = [u for u in UNIT_MAP if len(u) == 1]
+    single_pattern = '|'.join(re.escape(u) for u in single_chars)
+    multi_chars = sorted([u for u in UNIT_MAP | CONTAINER_MAP if len(u) > 1],
+                         key=len,
+                         reverse=True)
+    multi_pattern = '|'.join(re.escape(u) for u in multi_chars)
     
-    match = unit_pattern.search(cleaned)
-    if match:
-        unit_found = match.group(1).lower()
-        if unit_found in UNIT_ABBREVIATION_MAP:
-            unit_found = UNIT_ABBREVIATION_MAP[unit_found]
-        if unit_found in UNIT_PLURAL_MAP:
-            unit_found = UNIT_PLURAL_MAP[unit_found]
-        
-        # Remove the unit word from the original string
-        food_item = unit_pattern.sub('', cleaned, count=1)
+    # Optional quantity integers, decimals, 
+    # fractions (1/4) and mixed fractions (1 1/2)
+    qty_pattern = r"(\d+\s+\d+/\d+|\d+/\d+|\d+\.\d+|\d+)\s*-?\s*"
+    
+    # Look-around boundary rules when quantity is present
+    single_bnd_pattern = (rf"(?:(?<=\s)|(?<=\d)|(?<=/)|-|\b)"
+                          rf"({single_pattern})(?:\b|\.?)")
+    multi_bnd_pattern = rf"\b({multi_pattern})\b\.?"
+    
+    # Combined Regex matcher:
+    # Group 1: Quantity (optional)
+    # Group 2: Single-char Unit (optional `.` suffix), with quantity
+    # Group 3: Multi-char Unit (optional `.` suffix), with quantity
+    # Group 4: Multi-char unit (optional `.` suffix), no quantity
+    # Group 5: Single-char unit (required `.` suffix), no quantity
+    regex = re.compile(
+        rf"(?:{qty_pattern}(?:{single_bnd_pattern}|{multi_bnd_pattern}))"
+        # rf"(?:{qty_pattern}\b({single_bnd_pattern}|{multi_bnd_pattern})\b\.?)"
+        rf"|\b({multi_pattern})\b\.?"
+        rf"|\b({single_pattern})\.",
+        re.IGNORECASE
+    )
+    match = regex.search(cleaned)
+    if not match:
+        return None
+    
+    if match.group(1):
+        raw_qty = match.group(1)
+        quantity = convert_to_float(raw_qty)
+        raw_unit = (match.group(2) or match.group(3)).lower()
+    elif match.group(4):
+        quantity = 1.0
+        raw_unit = match.group(4).lower()
+    else:
+        quantity = 1.0
+        raw_unit = match.group(5).lower()
+    base_unit = UNIT_MAP.get(raw_unit, CONTAINER_MAP.get(raw_unit, 'unit'))
+    if unit_abbr:
+        base_unit = ABBREVIATIONS.get(base_unit, base_unit)
+    if quantity > 1.0:
+        final_unit = UNIT_PLURALS.get(base_unit, f"{base_unit}s")
+    else:
+        final_unit = base_unit
+    
+    start, end = match.span()
+    left_side = cleaned[:start]
+    right_side = cleaned[end:]
+    remaining_text = f"{left_side} {right_side}"
+    remaining_text = re.sub(r'\s+', ' ', remaining_text)
+    remaining_text = re.sub(r'^\s*,\s*|\s*,\s*$', '', remaining_text)
+    remaining_text = remaining_text.strip('(),. ')
+    
+    # Remove the unit word from the original string
+    food_item = regex.sub('', cleaned, count=1).strip()
+    if food_item:
         # Remove any abbreviation indicator
         if food_item.startswith('. '):
             food_item = food_item.replace('. ', '', 1)
-        
-        if container:
-            abbreviations = {v: k for k, v in UNIT_ABBREVIATION_MAP.items()}
-            unit_found = abbreviations.get(unit_found, unit_found)
-            volume, item = food_item.split(container, 1)
-            volume = f"({volume.replace('-', '').strip()}-{unit_found})"
-            food_item = f"{volume.strip()} {item.strip()}"
-            unit_found = container
-        
         # Clean up multi-space gaps first
         food_item = re.sub(r'\s+', ' ', food_item).strip()
-        
-        # Remove any space that was accidentally trapped 
-        # right before punctuation
+        # Remove any space that was accidentally trapped before punctuation
         food_item = re.sub(r'\s+([,;.\)])', r'\1', food_item)
-        
+        # Remove leading commas
         if food_item.startswith(','):
             food_item = food_item.lstrip(',').strip()
-            
-        return unit_found, food_item
-
-    return "", cleaned
-
-
-def apply_unit_conversions(qty: float, unit: str) -> tuple[float, str]:
-    """Convert small scale quantities down, large numbers up natively.
-    """
-    singular_unit = UNIT_PLURAL_MAP.get(unit.lower(), unit.lower())
-    config = UNIT_CONVERSIONS.get(singular_unit)
     
-    if not config:
-        # Return singular unit instead of the raw incoming 'unit' string
-        return qty, singular_unit 
+    return Measurement(quantity, final_unit, food_item)
 
-    if 'down' in config and qty <= config.get('min', 0.125):
-        multiplier, target = config['down']
-        return apply_unit_conversions(qty * multiplier, target)
 
-    if 'up' in config and qty >= config.get('max', 8):
-        multiplier, target = config['up']
-        return apply_unit_conversions(qty * multiplier, target)
+def reformat_container(clean_line: str, unit_abbr: bool = True) -> str:
+    """Reformat a container included in the ingredient line.
+    To always produce something like <container_count> <container_name>
+    (<container_quantity>-<container_unit_abbr>)
+    """
+    words  = [w.strip() for w in clean_line.split(' ') if w.strip()]
+    if not any(c_word.lower() in words for c_word in CONTAINER_MAP):
+        return clean_line
+    try:
+        qty = int(words[0])
+        words = words[1:]
+    except ValueError:
+        qty = 1
+    for idx, word in enumerate(words):
+        base_container = CONTAINER_MAP.get(word, None)
+        if base_container:
+            if qty > 1:
+                base_container = UNIT_PLURALS.get(base_container,
+                                                  f"{base_container}s")
+            # Assume container measurement is either immediately before or
+            # immediately after the container word
+            meas = None
+            if idx == 0 and idx + 1 < len(words):
+                # Check immediately after container name
+                candidate = words[idx + 1].strip('[](){}')
+                meas = extract_measurement(candidate)
+                if meas:
+                    # Clear the parsed value
+                    words[idx + 1] = ''
+            if not meas and idx > 0:
+                # Check before container name clearing all non-measurements
+                for rem_idx in range(idx):
+                    candidate = words[rem_idx].strip('[](){}')
+                    meas = extract_measurement(candidate)
+                    words[rem_idx] = ''
+            reformatted = base_container
+            if meas:
+                final_unit = UNIT_MAP.get(meas.unit, meas.unit)
+                if unit_abbr:
+                    final_unit = ABBREVIATIONS.get(final_unit, final_unit)
+                reformatted = f"{reformatted} ({int(meas.qty)}-{final_unit})"
+            words[idx] = reformatted
+            words = words[idx:]
+            break
+    return f"{qty} {' '.join([w.strip() for w in words if w.strip()])}"
 
-    # Return singular unit
-    return qty, singular_unit
+
+def reformat_single_char_units(text: str) -> str:
+    """Ensure single-character unit abbreviations use `.` suffix."""
+    words = text.split(' ')
+    for idx, word in enumerate(words):
+        if len(word) == 1 and word in UNIT_MAP:
+            words[idx] = f"{word}."
+    return ' '.join(words)
 
 
 def scale_ingredient_line(ingredient_line: str,
@@ -287,7 +479,12 @@ def scale_ingredient_line(ingredient_line: str,
     2. Supports Min-Max Hyphenated Range Arrays dynamically.
     3. Handles scaling shifts between cooking units natively.
     """
-    clean_line = ingredient_line.replace('((', '(').replace('))', ')')
+    # Remove duplicate brackets used in some encodings
+    clean_line = ingredient_line.replace('((', '(').replace('))', ')').strip()
+    # Ensure single-character abbreviations can be identified in regex
+    clean_line = reformat_single_char_units(clean_line)
+    # Ensure consistent formatting of containerized food items `1 can (15-oz)`
+    clean_line = reformat_container(clean_line)
     normalized = normalize_unicode_fractions(clean_line).strip()
     
     match = QTY_RANGE_REGEX.match(normalized)
@@ -308,29 +505,21 @@ def scale_ingredient_line(ingredient_line: str,
             if any([w2, f2, sf2, i2]) else None)
 
     # Relocate unit position structures
-    unit_raw, food_item = extract_unit_and_food(rest_text)
+    # unit_raw, food_item = extract_unit_and_food(rest_text)
+    meas = extract_measurement(reformat_single_char_units(rest_text))
+    food_item = meas.item if meas and meas.item else rest_text
 
-    # Run conversions using the calculated midpoint for range parameters
-    eval_val = (val1 + val2) / 2 if val2 else val1
-    
-    if unit_raw:
-        _, final_unit = apply_unit_conversions(eval_val, unit_raw)
-        # Apply the resolved conversion ratios backwards 
-        # onto individual quantities
-        if final_unit != UNIT_PLURAL_MAP.get(unit_raw.lower(), unit_raw.lower()):
-            singular_src = UNIT_PLURAL_MAP.get(unit_raw.lower(), unit_raw.lower())
-            if ('down' in UNIT_CONVERSIONS.get(singular_src, {}) and 
-                UNIT_CONVERSIONS[singular_src]['down'][1] == final_unit):
-                ratio = UNIT_CONVERSIONS[singular_src]['down'][0]
-            else:
-                if 'down' in UNIT_CONVERSIONS.get(final_unit, {}):
-                    ratio = UNIT_CONVERSIONS[final_unit]['down'][0]
-                else:
-                    ratio = 1
-                ratio = 1 / ratio if ratio != 1 else 1
-            val1 *= ratio
-            if val2: 
-                val2 *= ratio
+    if meas and meas.unit: # unit_raw:
+        # Run conversions using the calculated midpoint for range parameters
+        eval_val = (val1 + val2) / 2 if val2 else val1    
+        base_unit = UNIT_MAP.get(meas.unit, meas.unit)
+        conversion = apply_unit_conversions(eval_val, base_unit)
+        if val2:
+            val1 *= conversion.ratio
+            val2 *= conversion.ratio
+        else:
+            val1 = conversion.qty
+        final_unit = conversion.unit
     else:
         final_unit = ""
 
@@ -344,28 +533,14 @@ def scale_ingredient_line(ingredient_line: str,
 
     # Re-apply appropriate structural pluralization layout grammar suffixes
     if final_unit:
-        if abbreviate_unit and final_unit not in UNIT_ABBREVIATION_MAP:
-            abbreviations = {v: k for k, v in UNIT_ABBREVIATION_MAP.items()}
-            final_unit = abbreviations.get(final_unit, final_unit)
+        if abbreviate_unit:
+            final_unit = ABBREVIATIONS.get(final_unit, final_unit)
         is_plural = val1 > 1 or (val2 and val2 > 1)
         if is_plural:
-            # Reverse-lookup the exact mapping plural spelling key
-            final_unit = next(
-                (k for k, v in UNIT_PLURAL_MAP.items() 
-                 if v == final_unit),
-                final_unit + 's'
-            )
-        else:
-            # Force it to stay singular if quantity drops to 1 or below
-            final_unit = UNIT_PLURAL_MAP.get(
-                final_unit.lower(), final_unit.lower()
-            )
+            final_unit = UNIT_PLURALS.get(final_unit, f"{final_unit}s")
 
     # Construct the final rearranged string text layout line
     components = [qty_str, final_unit, food_item]
     cleaned = " ".join([c for c in components if c]).strip()
-    container_masses = ['g', 'oz', 'kg', 'lb']
-    for mass in container_masses:
-        cleaned = cleaned.replace(f' {mass} ', f'{mass} ')
     cleaned = cleaned.replace(' , ', ', ')
     return cleaned

@@ -4,7 +4,8 @@ from fractions import Fraction
 import pytest
 
 from app.ingredient import (
-    extract_unit_and_food,
+    Measurement,
+    extract_measurement,
     format_fraction,
     normalize_unicode_fractions,
     scale_ingredient_line,
@@ -44,16 +45,22 @@ def test_normalize_unicode_fraction(input, expected):
 
 
 @pytest.mark.parametrize(
-    "input, expected_unit, expected_food",
+    "text, unit_abbr, expected_measurement",
     [
-        ("pounds pork loin or chops", "pound", "pork loin or chops"),
-        ("tsp. kosher salt", "teaspoon", "kosher salt"),
-        ("15-ounce can black beans", "can", "(15-oz) black beans"),
-        ("c. vegetable oil", "cup", "vegetable oil"),
+        ("pounds pork loin or chops", None, Measurement(1, 'pound', 'pork loin or chops')),
+        ("tsp. kosher salt", None, Measurement(1, 'teaspoon', 'kosher salt')),
+        ("tsp. kosher salt", True, Measurement(1, 'tsp', 'kosher salt')),
+        ("c. vegetable oil", None, Measurement(1, 'cup', 'vegetable oil')),
+        ("1/4 c. vegetable oil", None, Measurement(0.25, 'cup', 'vegetable oil')),
+        ("1 1/2 tsp. kosher salt", None, Measurement(1.5, 'teaspoons', 'kosher salt')),
+        ("can (15-oz) black beans", None, Measurement(1, 'can', '(15-oz) black beans')),
     ]
 )
-def test_extract_unit_and_food(input, expected_unit, expected_food):
-    assert extract_unit_and_food(input) == (expected_unit, expected_food)
+def test_extract_measurement(text, unit_abbr, expected_measurement):
+    if unit_abbr is not None:
+        assert extract_measurement(text, unit_abbr) == expected_measurement
+    else:
+        assert extract_measurement(text) == expected_measurement
 
 
 @pytest.mark.parametrize(
@@ -67,9 +74,11 @@ def test_extract_unit_and_food(input, expected_unit, expected_food):
         ("1 - 2 tablespoons water (to thin)", 2, False, "2-4 tablespoons water (to thin)"),
         ("1 ½ pounds pork loin or chops ((cut into 1-inch pieces))", None, False, "1½ pounds pork loin or chops (cut into 1-inch pieces)"),
         ("¼ cup less-sodium soy sauce ((plus more if desired))", 2, False, "½ cup less-sodium soy sauce (plus more if desired)"),
+
         ("3 garlic cloves, minced", None, False, "3 cloves garlic, minced"),
         ("3 garlic cloves, minced", 1/3, False, "1 clove garlic, minced"),
         ("Zest of 1 lemon", 2, False, "2 lemon zest"),
+
         ("0.6667 cup stuff", None, False, "⅔ cup stuff"),
         ("1 tsp. kosher salt", None, False, "1 teaspoon kosher salt"),
         ("1 tsp. kosher salt", None, True, "1 tsp kosher salt"),
@@ -77,6 +86,10 @@ def test_extract_unit_and_food(input, expected_unit, expected_food):
         ("3 15-ounce cans green enchilada sauce", 1/2, True, "1½ cans (15-oz) green enchilada sauce"),
         ("1/4 cup vegetable oil", None, False, "¼ cup vegetable oil"),
         ("1/4 c. vegetable oil", None, False, "¼ cup vegetable oil"),
+        ("161-mL can coconut milk", None, False, "1 can (161-ml) coconut milk"),
+        ("1 14 or 15-oz can organic pumpkin", None, False, "1 can (15-oz) organic pumpkin"),
+        ("2 cans (15-oz) coconut milk", None, False, "2 cans (15-oz) coconut milk"),
+        ("675g chicken fillets, cut in half", None, False, "675 grams chicken fillets, cut in half"),
     ]
 )
 def test_scale_ingredient_line(input, scale, unit_abbr, expected):
