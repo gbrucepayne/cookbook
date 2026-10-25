@@ -77,8 +77,6 @@ CONTAINER_MAP = {
     'cans': 'can',
     'package': 'package',
     'packages': 'package',
-    'glass': 'glass',
-    'glasses': 'glass',
 }
 
 ABBREVIATIONS = {
