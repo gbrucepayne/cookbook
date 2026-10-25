@@ -453,6 +453,8 @@ def scale_ingredient_line(ingredient_line: str,
     3. Handles scaling shifts between cooking units natively.
     """
     cleaned = ingredient_line.strip()
+    if cleaned.startswith('# '):
+        return cleaned
     meas = extract_measurement(cleaned)
     if not meas:
         return cleaned

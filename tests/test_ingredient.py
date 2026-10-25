@@ -99,6 +99,8 @@ def test_extract_measurement(text, unit_abbr, expected_measurement):
         ("675g chicken fillets, cut in half", None, False, "675 grams chicken fillets, cut in half"),
 
         ("5 pitted dates, chopped (or 3 large medjool)", None, False, "5 pitted dates, chopped (or 3 large medjool)"),
+        
+        ("# Section Heading", None, False, "# Section Heading"),
     ]
 )
 def test_scale_ingredient_line(input, scale, unit_abbr, expected):
