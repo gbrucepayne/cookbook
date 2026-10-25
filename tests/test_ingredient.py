@@ -38,6 +38,7 @@ def test_format_fraction(input, separator, expected):
         ('1½ - 2', '1 1/2 - 2'),
         ('1½-2', '1 1/2 - 2'),
         ('0.66', '2/3'),
+        ('1-1.5', '1 - 1 1/2'),
     ]
 )
 def test_normalize_unicode_fraction(input, expected):
@@ -47,13 +48,19 @@ def test_normalize_unicode_fraction(input, expected):
 @pytest.mark.parametrize(
     "text, unit_abbr, expected_measurement",
     [
-        ("pounds pork loin or chops", None, Measurement(1, 'pound', 'pork loin or chops')),
-        ("tsp. kosher salt", None, Measurement(1, 'teaspoon', 'kosher salt')),
-        ("tsp. kosher salt", True, Measurement(1, 'tsp', 'kosher salt')),
-        ("c. vegetable oil", None, Measurement(1, 'cup', 'vegetable oil')),
-        ("1/4 c. vegetable oil", None, Measurement(0.25, 'cup', 'vegetable oil')),
-        ("1 1/2 tsp. kosher salt", None, Measurement(1.5, 'teaspoons', 'kosher salt')),
-        ("can (15-oz) black beans", None, Measurement(1, 'can', '(15-oz) black beans')),
+        ("pounds pork loin or chops", None, Measurement(1, None, 'pound', 'pork loin or chops')),
+        ("tsp. kosher salt", None, Measurement(1, None, 'teaspoon', 'kosher salt')),
+        ("tsp. kosher salt", True, Measurement(1, None, 'tsp', 'kosher salt')),
+        ("c. vegetable oil", None, Measurement(1, None, 'cup', 'vegetable oil')),
+        ("1/4 c. vegetable oil", None, Measurement(0.25, None, 'cup', 'vegetable oil')),
+        ("1 1/2 tsp. kosher salt", None, Measurement(1.5, None, 'teaspoons', 'kosher salt')),
+        ("can (15-oz) black beans", None, Measurement(1, None, 'can', '(15-oz) black beans')),
+        ("5 pitted dates, chopped (or 3 large medjool)", None, Measurement(5, None, None, 'pitted dates, chopped (or 3 large medjool)')),
+        ("3-5 pitted dates, chopped", None, Measurement(3, 5, None, 'pitted dates, chopped')),
+        ("3 garlic cloves, minced", None, Measurement(3, None, 'cloves', 'garlic, minced')),
+        ("Zest of 1 lemon", None, Measurement(1, None, None, 'lemon zest')),
+        ("250g chicken", None, Measurement(250, None, 'grams', 'chicken')),
+        ("250-300g\tchicken", None, Measurement(250, 300, 'grams', 'chicken')),
     ]
 )
 def test_extract_measurement(text, unit_abbr, expected_measurement):
@@ -90,6 +97,8 @@ def test_extract_measurement(text, unit_abbr, expected_measurement):
         ("1 14 or 15-oz can organic pumpkin", None, False, "1 can (15-oz) organic pumpkin"),
         ("2 cans (15-oz) coconut milk", None, False, "2 cans (15-oz) coconut milk"),
         ("675g chicken fillets, cut in half", None, False, "675 grams chicken fillets, cut in half"),
+
+        ("5 pitted dates, chopped (or 3 large medjool)", None, False, "5 pitted dates, chopped (or 3 large medjool)"),
     ]
 )
 def test_scale_ingredient_line(input, scale, unit_abbr, expected):
