@@ -61,6 +61,9 @@ def test_normalize_unicode_fraction(input, expected):
         ("Zest of 1 lemon", None, Measurement(1, None, None, 'lemon zest')),
         ("250g chicken", None, Measurement(250, None, 'grams', 'chicken')),
         ("250-300g\tchicken", None, Measurement(250, 300, 'grams', 'chicken')),
+        ('▢ 1 pound Brussels sprouts, trimmed and halved', None, Measurement(1, None, 'pound', 'Brussels sprouts, trimmed and halved')),
+        ('▢ Freshly ground black pepper', None, Measurement(1, None, None, 'Freshly ground black pepper')),
+        ("# Section Heading", None, None),
     ]
 )
 def test_extract_measurement(text, unit_abbr, expected_measurement):
@@ -101,6 +104,9 @@ def test_extract_measurement(text, unit_abbr, expected_measurement):
         ("5 pitted dates, chopped (or 3 large medjool)", None, False, "5 pitted dates, chopped (or 3 large medjool)"),
         
         ("# Section Heading", None, False, "# Section Heading"),
+
+        ('▢ Freshly ground black pepper', None, False, "Freshly ground black pepper"),
+        ('▢ Freshly ground black pepper', 2, False, "Freshly ground black pepper"),
     ]
 )
 def test_scale_ingredient_line(input, scale, unit_abbr, expected):

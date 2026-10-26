@@ -108,6 +108,72 @@ UNIT_CONVERSIONS = {
     }
 }
 
+# Extract non-alphanumeric/bracket leading characters
+NON_ALNUM_START = re.compile(r'^[^a-zA-Z0-9()]*')
+
+# Extract common preparatory terms for standard reordering
+PREP_TERMS = r'(zest|juice|peel|rind|grated\s+peel|segments?|seeds?)'
+PREP_REORDER_PTN = re.compile(rf"""
+    \b{PREP_TERMS}\b          # Group 1: The preparatory action term
+    \s+ of \s+                # Match the linking word 'of' surrounded by spaces
+    (                         # Group 2: The Quantity block
+        \d+ \s* - \s* \d+     # Matches ranges like '1 - 2'
+        | \d*\.?\d+           # Or standard integers/decimals like '1' or '0.5'
+        | [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]   # Or standalone unicode vulgar glyph assets
+    )
+    \s+                       # Trailing space separation spacer
+    ([^,\n]+)                 # Group 3: The baseline ingredient text string
+""", re.VERBOSE | re.IGNORECASE)
+
+# Extracts quantity range 
+QTY_RANGE_PTN = re.compile(r"""
+    ^                        # Match only at the start of the string
+    (                        # Start of Capture Group 1 (First Quantity)
+        \d*                  # Optional whole digits
+        \.?                  # Optional decimal point
+        \d*                  # Optional fractional digits
+        [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
+    )                        # End of Capture Group 1
+    \s* - \s*                # Match range marker ignoring surrounding spaces
+    (                        # Start of Capture Group 2 (Second Quantity)
+        \d*                  # Optional whole digits
+        \.?                  # Optional decimal point
+        \d*                  # Optional fractional digits
+        [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
+    )                        # End of Capture Group 2
+""", re.VERBOSE)
+
+QTY_SINGLE_PTN = re.compile(r"""
+    ^                        # Match only at the start of the string
+    (                        # Start of Capture Group 1
+        \d*                  # Optional whole digits
+        \.?                  # Optional decimal point
+        \d*                  # Optional fractional digits
+        [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
+    )                        # End of Capture Group 1
+    (?=[A-Za-z])             # Lookahead: followed immediately by a unit letter
+""", re.VERBOSE)
+
+# Extract quantity [Qty1](-[Qty2])? [Unit/Food Name String]
+# Evaluates ranges like "2-3", "1 1/2-2", or standalone numbers
+QTY_CLEAN_TEXT_PTN = re.compile(r"""
+    ^                           # Match from start of string only
+    (?:                         # Start of optional first quantity
+        (\d+)\s+(\d+/\d+)       # group 2 & 3: mixed, whole & fraction qty1
+        |(\d+/\d+)              # group 3: standalone fraction qty1
+        |(\d+)                  # group 4: standalone whole qty1
+    )
+    (?:                         # Start of optional range second quantity
+        \s* - \s*                 # range spacer
+        (?:
+            (\d+)\s+(\d+/\d+)   # group 5 & 6: mixed, whole & fraction qty2
+            |(\d+/\d+)          # group 7: standalone fraction qty2
+            |(\d+)              # group 8: standalong whole qty2
+        )
+    )
+    ?\s*(.*)$                   # Remaining text
+""", re.VERBOSE)
+
 
 def pluralize(unit: str) -> str:
     """Pluralize a unit of measure."""
@@ -119,6 +185,11 @@ def pluralize(unit: str) -> str:
     return f"{base_unit}s"
 
 
+def remove_leading_non_alnum(line: str) -> str:
+    """Remove all leading non-alphanumeric characters in a string."""
+    return NON_ALNUM_START.sub('', line)
+
+
 def reorder_cooking_terms(text: str) -> str:
     """
     Transforms phrases like 'zest of 1 lemon' into '1 lemon zest' natively.
@@ -126,30 +197,15 @@ def reorder_cooking_terms(text: str) -> str:
     Works for common preparations like zest, juice, rind, 
     (grated) peel, segments, seeds.
     """
-    # Define common preparatory cooking terms
-    terms_pool = r"(zest|juice|peel|rind|grated\s+peel|segments?|seeds?)"
-    
-    # Pattern structures: [Term] + optional space + 'of' + optional space + [Quantity] + [Ingredient Name]
-    reorder_pattern = re.compile(rf"""
-        \b{terms_pool}\b          # Group 1: The preparatory action term
-        \s+ of \s+                # Match the linking word 'of' surrounded by spaces
-        (                         # Group 2: The Quantity block
-            \d+ \s* - \s* \d+     # Matches ranges like '1 - 2'
-            | \d*\.?\d+           # Or standard integers/decimals like '1' or '0.5'
-            | [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]   # Or standalone unicode vulgar glyph assets
-        )
-        \s+                       # Trailing space separation spacer
-        ([^,\n]+)                 # Group 3: The baseline ingredient text string
-    """, re.VERBOSE | re.IGNORECASE)
 
     def rearrange_and_lowercase(match):
+        """Arrange prep terms [qty] [ingredient] [term]"""
         term = match.group(1).lower()
         qty = match.group(2)
         ingredient = match.group(3).strip()
         return f"{qty} {ingredient} {term}"
     
-    # 3. Rearrange the layout groups: \2 (Quantity) + \3 (Ingredient) + \1 (Term)
-    return reorder_pattern.sub(rearrange_and_lowercase, text.strip())
+    return PREP_REORDER_PTN.sub(rearrange_and_lowercase, text.strip())
 
 
 def convert_floats_to_fractions(text: str) -> str:
@@ -181,34 +237,9 @@ def normalize_unicode_fractions(text: str) -> str:
     
     Ensures both 1½ and 1 ½ are valid.
     """
-    range_pattern = re.compile(r"""
-        ^                        # Match only at the start of the string
-        (                        # Start of Capture Group 1 (First Quantity)
-            \d*                  # Optional whole digits
-            \.?                  # Optional decimal point
-            \d*                  # Optional fractional digits
-            [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
-        )                        # End of Capture Group 1
-        \s* - \s*                # Match range marker ignoring surrounding spaces
-        (                        # Start of Capture Group 2 (Second Quantity)
-            \d*                  # Optional whole digits
-            \.?                  # Optional decimal point
-            \d*                  # Optional fractional digits
-            [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
-        )                        # End of Capture Group 2
-    """, re.VERBOSE)
-    single_quantity_pattern = re.compile(r"""
-        ^                        # Match only at the start of the string
-        (                        # Start of Capture Group 1
-            \d*                  # Optional whole digits
-            \.?                  # Optional decimal point
-            \d*                  # Optional fractional digits
-            [½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]?   # Optional unicode fraction glyph
-        )                        # End of Capture Group 1
-        (?=[A-Za-z])             # Lookahead: followed immediately by a unit letter
-    """, re.VERBOSE)
-    cleaned = re.sub(range_pattern, r'\1 - \2', text.strip())
-    cleaned = re.sub(single_quantity_pattern, r'\1', cleaned)
+    # Ensure a space between range quantities
+    cleaned = re.sub(QTY_RANGE_PTN, r'\1 - \2', text.strip())
+    cleaned = re.sub(QTY_SINGLE_PTN, r'\1', cleaned)
     # Remove extraneous whitespace
     cleaned = ' '.join(cleaned.split())
     cleaned = convert_floats_to_fractions(cleaned)
@@ -230,13 +261,11 @@ def float_to_nearest_fraction(val: float, min_res: float = 1/4) -> Fraction:
     """
     if val <= 0:
         return Fraction(0)
-    
-    # Check closest
+    # Check closest to return
     eighths = round(val * 8) / 8
     quarters = round(val * 4) / 4
     thirds = round(val * 3) / 3
     halves = round(val * 2) / 2
-    
     if min_res < 1/4 and abs(val - eighths) <= abs(val - quarters):
         return Fraction(eighths).limit_denominator(8)
     if min_res < 1/3 and abs(val - quarters) <= abs(val - thirds):
@@ -315,8 +344,12 @@ def extract_measurement(line: str, unit_abbr: bool = False) -> Measurement|None:
         line: The ingredient line to parse.
         unit_abbr (optional): Set to abbreviate unit e.g. `tsp`
     """
+    if line.startswith('# '):
+        return None
     # Remove duplicate brackets used in some encodings
     cleaned = line.replace('((', '(').replace('))', ')').strip()
+    # Clean up any residual parsed junk preceding the text (e.g. checkboxes, bullets)
+    cleaned = remove_leading_non_alnum(cleaned)
     # Ensure consistent formatting of containerized food items `1 can (15-oz)`
     cleaned = reformat_container(cleaned)
     cleaned = reorder_cooking_terms(cleaned)
@@ -324,23 +357,7 @@ def extract_measurement(line: str, unit_abbr: bool = False) -> Measurement|None:
     cleaned = normalize_unicode_fractions(cleaned).strip()
     meas = Measurement()
 
-    # Extract quantity [Qty1](-[Qty2])? [Unit/Food Name String]
-    # Evaluates ranges like "2-3", "1 1/2-2", or standalone numbers
-    # 1: mw1 mixed fraction, whole part (\d+)
-    # 2: mf1 mixed fraction, fraction part \s+(\d+/\d+)
-    # 3: f1 standalone fraction (\d+/\d+)
-    # 4: w1 standalone whole number (\d+)
-    # 5: mw2 mixed fraction, whole part 2nd quantity
-    # 6: mf2 mixed fraction, fraction part 2nd quantity
-    # 7: f2 standalone fraction 2nd quantity
-    # 8: w2 standalone whole number 2nd quantity
-    # 9: trailing text
-    qty_range_pattern = re.compile(r"""
-        ^(?:(\d+)\s+(\d+/\d+)|(\d+/\d+)|(\d+))             # 1st Quantity
-        (?:\s*-\s*(?:(\d+)\s+(\d+/\d+)|(\d+/\d+)|(\d+)))   # Dash 2nd Quantity
-        ?\s*(.*)$                                          # Remaining text
-    """, re.VERBOSE)
-    qty_match = qty_range_pattern.match(cleaned)
+    qty_match = QTY_CLEAN_TEXT_PTN.match(cleaned)
     if qty_match:
         mw1, mf1, f1, w1, mw2, mf2, f2, w2, cleaned = qty_match.groups()
         if any([mw1, f1, w1]):
@@ -484,12 +501,14 @@ def scale_ingredient_line(ingredient_line: str,
         frac2 = float_to_nearest_fraction(val2)
         qty_str = f"{qty_str}-{format_fraction(frac2, sep=fraction_sep)}"
 
-    # Re-apply appropriate structural pluralization layout grammar suffixes
+    # Format units and remove quantity if no units are defined
     if final_unit:
         if abbreviate_unit:
             final_unit = ABBREVIATIONS.get(final_unit, final_unit)
         if val1 > 1 or (val2 and val2 > 1):
             final_unit = pluralize(final_unit)
+    elif meas.qty == 1 and not meas.qty_max:
+        qty_str = ''
 
     # Construct the final rearranged string text layout line
     components = [qty_str, final_unit, food_item]
